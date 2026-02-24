@@ -35,6 +35,7 @@ class LogPanel(ctk.CTkFrame):
         self.current_project_id: Optional[int] = None
         self.current_project_name: str = ""
         self.logs: dict[int, list[str]] = {}
+        self._custom_filters: list[dict] = []  # set by reload_filters()
 
         self._setup_ui()
 
@@ -228,6 +229,21 @@ class LogPanel(ctk.CTkFrame):
         if logs_dir.exists():
             os.startfile(str(logs_dir))
 
+    def reload_filters(self, filters: list[dict]):
+        """Update custom color filters and register their tags.
+
+        Each filter dict has: prefix (str), match_type ('contains'|'starts with'),
+        color (hex str), enabled (bool).
+        """
+        self._custom_filters = [
+            f for f in filters
+            if f.get("enabled") and f.get("prefix")
+        ]
+        # Register a unique tag for each active filter
+        for i, flt in enumerate(self._custom_filters):
+            tag_name = f"custom_filter_{i}"
+            self.log_text.tag_config(tag_name, foreground=flt["color"])
+
     def add_log(self, project_id: int, line: str):
         """Add a live log line for a project."""
         if project_id not in self.logs:
@@ -307,10 +323,27 @@ class LogPanel(ctk.CTkFrame):
             self.log_text.insert("end", "\n")
             return
 
-        # Fallback parsing for lines that aren't matching the standard log structure (e.g. ASCII art)
+        # Fallback parsing for lines that aren't matching the standard log structure
         line_lower = line.lower()
+
+        # ── Custom color filters (user-defined) ──────────────────────
+        for i, flt in enumerate(self._custom_filters):
+            pattern = flt["prefix"]
+            match_type = flt.get("match_type", "contains")
+            hit = (
+                line_lower.startswith(pattern.lower())
+                if match_type == "starts with"
+                else pattern.lower() in line_lower
+            )
+            if hit:
+                tag_name = f"custom_filter_{i}"
+                self._insert_message_with_links(line, tag_name)
+                if not line.endswith("\n"):
+                    self.log_text.insert("end", "\n")
+                return
+
+        # ── Built-in keyword coloring ─────────────────────────────────
         base_tag = None
-        
         if "error" in line_lower or "traceback" in line_lower or "exception" in line_lower or "failed" in line_lower or "❌" in line:
             base_tag = "error"
         elif "warn" in line_lower or "⚠️" in line:

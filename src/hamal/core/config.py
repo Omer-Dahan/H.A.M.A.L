@@ -1,5 +1,6 @@
 """Application configuration and paths."""
 
+import json
 import os
 from pathlib import Path
 
@@ -18,6 +19,51 @@ def get_data_dir() -> Path:
         data_dir = Path.home() / ".hamal"
     data_dir.mkdir(parents=True, exist_ok=True)
     return data_dir
+
+
+def get_settings_path() -> Path:
+    """Get the path to the JSON settings file."""
+    return get_data_dir() / "settings.json"
+
+
+# Default settings used when no settings file exists yet
+_DEFAULT_SETTINGS = {
+    "minimize_to_tray": False,
+    "log_filters": [
+        {"prefix": "", "match_type": "contains", "color": "#a6e3a1", "enabled": False},
+        {"prefix": "", "match_type": "contains", "color": "#89b4fa", "enabled": False},
+        {"prefix": "", "match_type": "contains", "color": "#f9e2af", "enabled": False},
+        {"prefix": "", "match_type": "contains", "color": "#f38ba8", "enabled": False},
+        {"prefix": "", "match_type": "contains", "color": "#cba6f7", "enabled": False},
+    ],
+}
+
+
+def load_settings() -> dict:
+    """Load settings from disk. Returns defaults for missing keys."""
+    path = get_settings_path()
+    settings = dict(_DEFAULT_SETTINGS)
+    if path.exists():
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            # Only keep known keys to avoid stale data
+            for key in _DEFAULT_SETTINGS:
+                if key in data:
+                    settings[key] = data[key]
+        except (OSError, json.JSONDecodeError):
+            pass  # Fall back to defaults on any read error
+    return settings
+
+
+def save_settings(settings: dict) -> None:
+    """Persist settings to disk."""
+    path = get_settings_path()
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(settings, f, indent=2)
+    except OSError:
+        pass  # Best-effort: ignore write errors
 
 
 def get_database_path() -> Path:

@@ -40,12 +40,14 @@ class Dashboard(ctk.CTkFrame):
         master,
         process_manager: ProcessManager,
         on_view_logs: Callable[[int, str], None],
+        on_project_form: Optional[Callable] = None,
         **kwargs
     ):
         super().__init__(master, fg_color="transparent", **kwargs)
 
         self.process_manager = process_manager
         self.on_view_logs = on_view_logs
+        self.on_project_form = on_project_form  # Callable(project=None) for add/edit
         self.project_rows: dict[int, dict] = {}  # project_id -> row widgets
         self.active_log_project_id: Optional[int] = None  # Track which project's logs are open
 
@@ -411,11 +413,15 @@ class Dashboard(ctk.CTkFrame):
             row["uptime"].configure(text="-")
 
     def _on_add_project(self):
-        """Show add project dialog."""
-        from hamal.ui.dialogs import AddProjectDialog  # pylint: disable=import-outside-toplevel
-        dialog = AddProjectDialog(self.winfo_toplevel())
-        if dialog.get_result():
-            self._refresh_projects()
+        """Show add project panel (in-app)."""
+        if self.on_project_form:
+            self.on_project_form(project=None)
+        else:
+            # Fallback: legacy dialog
+            from hamal.ui.dialogs import AddProjectDialog  # pylint: disable=import-outside-toplevel
+            dialog = AddProjectDialog(self.winfo_toplevel())
+            if dialog.get_result():
+                self._refresh_projects()
 
     def _on_start_project(self, project_id: int):
         """Start a project."""
@@ -428,13 +434,19 @@ class Dashboard(ctk.CTkFrame):
         self.process_manager.stop_project(project_id)
 
     def _on_edit_project(self, project_id: int):
-        """Edit a project."""
-        from hamal.ui.dialogs import EditProjectDialog  # pylint: disable=import-outside-toplevel
-        project = get_project_by_id(project_id)
-        if project:
-            dialog = EditProjectDialog(self.winfo_toplevel(), project)
-            if dialog.get_result():
-                self._refresh_projects()
+        """Edit a project (in-app)."""
+        if self.on_project_form:
+            project = get_project_by_id(project_id)
+            if project:
+                self.on_project_form(project=project)
+        else:
+            # Fallback: legacy dialog
+            from hamal.ui.dialogs import EditProjectDialog  # pylint: disable=import-outside-toplevel
+            project = get_project_by_id(project_id)
+            if project:
+                dialog = EditProjectDialog(self.winfo_toplevel(), project)
+                if dialog.get_result():
+                    self._refresh_projects()
 
     def _on_delete_project(self, project_id: int, project_name: str):
         """Delete a project."""
