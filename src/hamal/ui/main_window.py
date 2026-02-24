@@ -12,6 +12,7 @@ from hamal.ui.about_dialog import AboutDialog
 from hamal.ui.settings_dialog import SettingsPanel
 from hamal.ui.log_filter_dialog import LogFilterPanel
 from hamal.ui.project_form_panel import ProjectFormPanel
+from hamal.ui.tray import TrayIcon
 
 
 # Catppuccin Mocha colors
@@ -55,20 +56,23 @@ class MainWindow(ctk.CTk):
             icons_dir = get_icons_dir()
             icon_ico = icons_dir / "icon.ico"
 
-            # Windows: iconbitmap is preferred for title bar
             if icon_ico.exists():
+                # Windows: iconbitmap uses the .ico file which contains all
+                # sizes (16, 32, 48, 256). The OS picks the right one.
+                # Do NOT call iconphoto afterwards – it overrides iconbitmap
+                # and forces Tkinter to use 16/32 px (the flat, un-shadowed
+                # variants) for the title bar and taskbar.
                 self.iconbitmap(icon_ico)
-
-            # Fallback / Cross-platform support with PNGs
-            from PIL import Image, ImageTk  # pylint: disable=import-outside-toplevel
-            icon_images = []
-            for size in ["256", "48", "32", "16"]:
-                path = icons_dir / f"{size}.png"
-                if path.exists():
-                    icon_images.append(ImageTk.PhotoImage(Image.open(path)))
-
-            if icon_images:
-                self.iconphoto(True, *icon_images)
+            else:
+                # Non-Windows fallback: use PNGs via iconphoto
+                from PIL import Image, ImageTk  # pylint: disable=import-outside-toplevel
+                icon_images = []
+                for size in ["256", "48", "32", "16"]:
+                    path = icons_dir / f"{size}.png"
+                    if path.exists():
+                        icon_images.append(ImageTk.PhotoImage(Image.open(path)))
+                if icon_images:
+                    self.iconphoto(True, *icon_images)
 
         except Exception as e:  # pylint: disable=broad-exception-caught
             print(f"Failed to set window icon: {e}")
@@ -84,6 +88,12 @@ class MainWindow(ctk.CTk):
         self._filter_panel: LogFilterPanel | None = None
         self._project_panel: ProjectFormPanel | None = None
         self._right_panel = "log"  # "log" | "settings" | "filters" | "project"
+
+        # Tray icon (lazy – only shown when minimize_to_tray is active)
+        self._tray = TrayIcon(
+            on_show=lambda: self.after(0, self._restore_from_tray),
+            on_exit=lambda: self.after(0, self._force_quit),
+        )
 
         # Setup callbacks
         self._setup_callbacks()
@@ -548,15 +558,17 @@ class MainWindow(ctk.CTk):
     def _on_closing(self):
         """Handle window close button.
 
-        If 'minimize_to_tray' is enabled the window is hidden instead of
-        destroyed.  File → Exit always destroys the window.
+        If 'minimize_to_tray' is enabled the window is hidden and a tray icon
+        appears.  File -> Exit always destroys the window.
         """
         if self._settings.get("minimize_to_tray", False):
-            # Hide the window; the process keeps running
+            # Hide window and show tray icon
             self.withdraw()
+            self._tray.show()
             return
 
         # Normal exit path
+        self._tray.hide()
         running = self.dashboard.get_running_count()
         if running > 0:
             if not messagebox.askyesno(
@@ -565,5 +577,16 @@ class MainWindow(ctk.CTk):
             ):
                 return
 
+        self.process_manager.stop_all()
+        self.destroy()
+
+    def _restore_from_tray(self):
+        """Restore the window when the user clicks 'Show' in the tray menu."""
+        self.deiconify()
+        self.lift()
+        self.focus_force()
+
+    def _force_quit(self):
+        """Exit the application from the tray 'Exit' menu item."""
         self.process_manager.stop_all()
         self.destroy()

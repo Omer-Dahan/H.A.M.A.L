@@ -127,19 +127,23 @@ class SettingsPanel(ctk.CTkFrame):
 
         tray_row = self._option_row(
             content,
-            label="Minimize to tray on close  (X button)",
+            label="Minimize to tray on close (X button)",
             description="Hides the window instead of exiting when you press ×.",
             row=3,
         )
         self._tray_var = ctk.BooleanVar(value=self._settings.get("minimize_to_tray", False))
-        # Switch on the LEFT (col=0), label stays at col=1
+        
+        # Switch on the RIGHT (col=2)
         ctk.CTkSwitch(
             tray_row,
             text="",
             variable=self._tray_var,
             onvalue=True, offvalue=False,
+            width=50,
             progress_color=_COLORS["blue"],
-        ).grid(row=0, column=0, padx=(14, 4), pady=14)
+            button_color=_COLORS["text"],
+            button_hover_color=_COLORS["blue"],
+        ).grid(row=0, column=2, padx=(10, 16), pady=14)
 
         # ── Section: Logs ──────────────────────────────────────────────────
         self._section_label(content, "Logs", row=4)
@@ -178,24 +182,36 @@ class SettingsPanel(ctk.CTkFrame):
         )
 
     def _option_row(self, parent, label: str, description: str, row: int):
-        row_frame = ctk.CTkFrame(parent, fg_color=_COLORS["surface"], corner_radius=8)
-        row_frame.grid(row=row, column=0, sticky="ew", padx=16, pady=3)
-        row_frame.grid_columnconfigure(1, weight=1)  # label expands
+        row_frame = ctk.CTkFrame(parent, fg_color=_COLORS["surface"], corner_radius=12)
+        row_frame.grid(row=row, column=0, sticky="ew", padx=16, pady=4)
+        row_frame.grid_columnconfigure(1, weight=1)  # text expansions
 
-        # Control widget goes at col=2 (right side) – caller fills it in
+        # Text on the left/center (col=1)
         text_frame = ctk.CTkFrame(row_frame, fg_color="transparent")
-        text_frame.grid(row=0, column=1, padx=(8, 0), pady=10, sticky="w")
+        text_frame.grid(row=0, column=1, padx=(16, 8), pady=12, sticky="ew")
+        text_frame.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(
+        l_label = ctk.CTkLabel(
             text_frame, text=label,
-            font=ctk.CTkFont(size=13), text_color=_COLORS["text"], anchor="w",
-        ).pack(anchor="w")
+            font=ctk.CTkFont(size=14, weight="bold"), 
+            text_color=_COLORS["text"], 
+            anchor="w",
+            justify="left"
+        )
+        l_label.grid(row=0, column=0, sticky="ew")
+        # Handle wrapping if text is too long
+        l_label.bind("<Configure>", lambda e: l_label.configure(wraplength=e.width - 20))
 
         if description:
-            ctk.CTkLabel(
+            d_label = ctk.CTkLabel(
                 text_frame, text=description,
-                font=ctk.CTkFont(size=11), text_color=_COLORS["subtext"], anchor="w",
-            ).pack(anchor="w")
+                font=ctk.CTkFont(size=11), 
+                text_color=_COLORS["subtext"], 
+                anchor="w",
+                justify="left"
+            )
+            d_label.grid(row=1, column=0, sticky="ew", pady=(2, 0))
+            d_label.bind("<Configure>", lambda e: d_label.configure(wraplength=e.width - 20))
 
         return row_frame
 

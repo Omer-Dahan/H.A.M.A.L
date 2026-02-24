@@ -154,7 +154,8 @@ class LogPanel(ctk.CTkFrame):
         self.context_menu = tk.Menu(self.winfo_toplevel(), tearoff=False,
                                    bg=COLORS["surface"], fg=COLORS["text"],
                                    activebackground=COLORS["overlay"], activeforeground=COLORS["text"],
-                                   relief="flat", borderwidth=1)
+                                   relief="flat", borderwidth=1,
+                                   font=("Segoe UI", 19))
         
         self.context_menu.add_command(label="Copy (Ctrl+C)", command=self._copy_selection)
         self.context_menu.add_separator()
