@@ -2,13 +2,19 @@
 
 import json
 import os
+import sys
 from pathlib import Path
+
+try:
+    import winreg
+except ImportError:
+    winreg = None
 
 
 def get_data_dir() -> Path:
     """Get the application data directory. Creates it if it doesn't exist.
     
-    Uses %LOCALAPPDATA%\\HAMAL\\ on Windows for installer compatibility.
+    Uses %LOCALAPPDATA%\HAMAL\ on Windows for installer compatibility.
     This keeps user data separate from Program Files (read-only).
     """
     local_app_data = os.environ.get("LOCALAPPDATA")
@@ -29,6 +35,7 @@ def get_settings_path() -> Path:
 # Default settings used when no settings file exists yet
 _DEFAULT_SETTINGS = {
     "minimize_to_tray": False,
+    "run_on_startup": False,
     "log_filters": [
         {"prefix": "", "match_type": "contains", "color": "#a6e3a1", "enabled": False},
         {"prefix": "", "match_type": "contains", "color": "#89b4fa", "enabled": False},
@@ -83,6 +90,43 @@ def get_project_logs_dir(project_id: int) -> Path:
     project_logs_dir = get_logs_dir() / str(project_id)
     project_logs_dir.mkdir(parents=True, exist_ok=True)
     return project_logs_dir
+
+
+def set_run_on_startup(enabled: bool) -> bool:
+    """Enable or disable 'Run on Startup' via Windows Registry.
+    
+    Returns True if successful, False otherwise.
+    """
+    if winreg is None:
+        return False
+
+    app_name = "HAMAL"
+    
+    # Get the actual path to the executable
+    if getattr(sys, 'frozen', False):
+        # Running as compiled EXE
+        app_path = f'"{sys.executable}"'
+    else:
+        # Running as script - we probably don't want to register the python interp 
+        # but for dev testing we'll allow it. In production (installer) it will be frozen.
+        app_path = f'"{sys.executable}" "{Path(__file__).parents[2] / "hamal" / "main.py"}"'
+
+    try:
+        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
+        
+        if enabled:
+            winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, app_path)
+        else:
+            try:
+                winreg.DeleteValue(key, app_name)
+            except FileNotFoundError:
+                pass  # Already gone
+                
+        winreg.CloseKey(key)
+        return True
+    except OSError:
+        return False
 
 
 # Application constants

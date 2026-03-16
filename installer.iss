@@ -41,6 +41,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
+Name: "startup"; Description: "Launch HAMAL on Windows startup"; GroupDescription: "Additional options:"
 
 [Files]
 ; Copy the icon file specifically to the root for reliable shortcut creation
@@ -55,6 +56,10 @@ Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{a
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 ; Desktop shortcut (checked by default)
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; WorkingDir: "{app}"; IconFilename: "{app}\icon.ico"
+
+[Registry]
+; Run on startup registry key
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "HAMAL"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue; Tasks: startup
 
 [Run]
 ; Option to launch after installation

@@ -28,7 +28,12 @@ def create_project(
     name: str,
     folder_path: str,
     entrypoint: str,
-    interpreter_path: str
+    interpreter_path: str,
+    auto_start: bool = False,
+    schedule_enabled: bool = False,
+    schedule_start: Optional[str] = None,
+    schedule_stop: Optional[str] = None,
+    schedule_days: Optional[str] = None
 ) -> Project:
     """Create a new project."""
     session = get_session()
@@ -37,7 +42,12 @@ def create_project(
             name=name,
             folder_path=folder_path,
             entrypoint=entrypoint,
-            interpreter_path=interpreter_path
+            interpreter_path=interpreter_path,
+            auto_start=auto_start,
+            schedule_enabled=schedule_enabled,
+            schedule_start=schedule_start,
+            schedule_stop=schedule_stop,
+            schedule_days=schedule_days
         )
         session.add(project)
         session.commit()
@@ -52,7 +62,12 @@ def update_project(
     name: Optional[str] = None,
     folder_path: Optional[str] = None,
     entrypoint: Optional[str] = None,
-    interpreter_path: Optional[str] = None
+    interpreter_path: Optional[str] = None,
+    auto_start: Optional[bool] = None,
+    schedule_enabled: Optional[bool] = None,
+    schedule_start: Optional[str] = None,
+    schedule_stop: Optional[str] = None,
+    schedule_days: Optional[str] = None
 ) -> Optional[Project]:
     """Update an existing project."""
     session = get_session()
@@ -69,6 +84,16 @@ def update_project(
             project.entrypoint = entrypoint
         if interpreter_path is not None:
             project.interpreter_path = interpreter_path
+        if auto_start is not None:
+            project.auto_start = auto_start
+        if schedule_enabled is not None:
+            project.schedule_enabled = schedule_enabled
+        if schedule_start is not None:
+            project.schedule_start = schedule_start
+        if schedule_stop is not None:
+            project.schedule_stop = schedule_stop
+        if schedule_days is not None:
+            project.schedule_days = schedule_days
 
         session.commit()
         session.refresh(project)

@@ -39,6 +39,37 @@ def init_database():
     engine = get_engine()
     Base.metadata.create_all(bind=engine)
 
+    # Simple migration: Add auto_start column if it doesn't exist
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        # Check if the column exists
+        try:
+            result = conn.execute(text("PRAGMA table_info(projects)"))
+            columns = [row[1] for row in result]
+            if "auto_start" not in columns:
+                conn.execute(text("ALTER TABLE projects ADD COLUMN auto_start BOOLEAN DEFAULT 0 NOT NULL"))
+                print("[Database] Migrated: added 'auto_start' column.")
+            
+            if "schedule_enabled" not in columns:
+                conn.execute(text("ALTER TABLE projects ADD COLUMN schedule_enabled BOOLEAN DEFAULT 0 NOT NULL"))
+                print("[Database] Migrated: added 'schedule_enabled' column.")
+            
+            if "schedule_start" not in columns:
+                conn.execute(text("ALTER TABLE projects ADD COLUMN schedule_start VARCHAR(5)"))
+                print("[Database] Migrated: added 'schedule_start' column.")
+                
+            if "schedule_stop" not in columns:
+                conn.execute(text("ALTER TABLE projects ADD COLUMN schedule_stop VARCHAR(5)"))
+                print("[Database] Migrated: added 'schedule_stop' column.")
+            
+            if "schedule_days" not in columns:
+                conn.execute(text("ALTER TABLE projects ADD COLUMN schedule_days TEXT"))
+                print("[Database] Migrated: added 'schedule_days' column.")
+                
+            conn.commit()
+        except Exception as e:
+            print(f"[Database] Migration error: {e}")
+
 
 def get_session() -> Session:
     """Get a new database session. Caller is responsible for closing it."""

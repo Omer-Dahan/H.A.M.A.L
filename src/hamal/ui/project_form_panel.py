@@ -79,19 +79,14 @@ class ProjectFormPanel(ctk.CTkFrame):
     # ------------------------------------------------------------------
 
     def _build_ui(self):
-        scroll = ctk.CTkScrollableFrame(
-            self,
-            fg_color="transparent",
-            scrollbar_button_color=_COLORS["overlay"],
-            scrollbar_button_hover_color=_COLORS["blue"],
-        )
-        scroll.grid(row=0, column=0, sticky="nsew")
-        scroll.grid_columnconfigure(0, weight=1)
-        _patch_scroll_speed(scroll)
+        # Configure the main panel grid
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=0)  # Header
+        self.grid_rowconfigure(1, weight=1)  # Content
 
         # ── 3-column header (Back | Title | Esc) ──────────────────────
-        header = ctk.CTkFrame(scroll, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew", padx=8, pady=(12, 4))
+        header = ctk.CTkFrame(self, fg_color="transparent")
+        header.grid(row=0, column=0, sticky="ew", padx=5, pady=(5, 10))
         header.grid_columnconfigure(0, weight=1)
         header.grid_columnconfigure(1, weight=1)
         header.grid_columnconfigure(2, weight=1)
@@ -99,20 +94,20 @@ class ProjectFormPanel(ctk.CTkFrame):
         ctk.CTkButton(
             header,
             text="← Back",
-            width=90, height=34,
+            width=100, height=35, # Reduced slightly to match depth buttons
             fg_color=_COLORS["surface"],
             hover_color=_COLORS["overlay"],
             text_color=_COLORS["blue"],
             font=ctk.CTkFont(size=14, weight="bold"),
-            corner_radius=8,
+            corner_radius=12,
             command=self._cancel,
-        ).grid(row=0, column=0, sticky="w", padx=(0, 4))
+        ).grid(row=0, column=0, sticky="w", padx=(5, 4))
 
-        title_text = "Edit Project" if self._is_edit else "Add New Project"
+        title_text = "Project Settings" if self._is_edit else "Add New Project"
         ctk.CTkLabel(
             header,
             text=title_text,
-            font=ctk.CTkFont(size=17, weight="bold"),
+            font=ctk.CTkFont(size=19, weight="bold"), # Increased slightly
             text_color=_COLORS["text"],
             anchor="center",
         ).grid(row=0, column=1, sticky="ew")
@@ -123,10 +118,21 @@ class ProjectFormPanel(ctk.CTkFrame):
             font=ctk.CTkFont(size=11),
             text_color=_COLORS["subtext"],
             anchor="e",
-        ).grid(row=0, column=2, sticky="e", padx=(4, 8))
+        ).grid(row=0, column=2, sticky="e", padx=(4, 15))
+
+        # ── Scrollable Area ────────────────────────────────────────────
+        scroll = ctk.CTkScrollableFrame(
+            self,
+            fg_color="transparent",
+            scrollbar_button_color=_COLORS["overlay"],
+            scrollbar_button_hover_color=_COLORS["blue"],
+        )
+        scroll.grid(row=1, column=0, sticky="nsew")
+        scroll.grid_columnconfigure(0, weight=1)
+        _patch_scroll_speed(scroll)
 
         ctk.CTkFrame(scroll, height=1, fg_color=_COLORS["overlay"]).grid(
-            row=1, column=0, sticky="ew", padx=16, pady=(4, 12)
+            row=0, column=0, sticky="ew", padx=16, pady=(0, 12)
         )
 
         # ── Form card ──────────────────────────────────────────────────
@@ -139,9 +145,89 @@ class ProjectFormPanel(ctk.CTkFrame):
         else:
             self._build_add_form(card)
 
+        # ── Advanced section ───────────────────────────────────────────
+        self._section_label(scroll, "Behavior", row=3)
+
+        auto_row = self._option_row(
+            scroll,
+            label="Auto-start this project",
+            description="Start automatically after 10 seconds when the app runs.",
+            row=4,
+        )
+        self.auto_start_var = ctk.BooleanVar(value=self._project.auto_start if self._is_edit else False)
+        ctk.CTkSwitch(
+            auto_row,
+            text="",
+            variable=self.auto_start_var,
+            onvalue=True, offvalue=False,
+            width=50,
+            progress_color=_COLORS["blue"],
+            button_color=_COLORS["text"],
+            button_hover_color=_COLORS["blue"],
+        ).grid(row=0, column=2, padx=(10, 16), pady=14)
+
+        # ── Scheduling section ─────────────────────────────────────────
+        self._section_label(scroll, "Scheduling", row=5)
+
+        sched_row = self._option_row(
+            scroll,
+            label="Scheduled Operation",
+            description="Automatically start and stop the script at specific times.",
+            row=6,
+        )
+        
+        # Add time inputs to a NEW row (row 2) to allow text to be full width
+        time_frame = ctk.CTkFrame(sched_row, fg_color="transparent")
+        time_frame.grid(row=2, column=1, columnspan=3, padx=16, pady=(0, 4), sticky="w")
+        
+        # Start Time
+        ctk.CTkLabel(time_frame, text="Start:", font=ctk.CTkFont(size=11), text_color=_COLORS["subtext"]).grid(row=0, column=0, padx=4)
+        self.sched_start_entry = ctk.CTkEntry(
+            time_frame, width=60, height=28, placeholder_text="09:00",
+            fg_color=_COLORS["mantle"], border_color=_COLORS["overlay"],
+            text_color=_COLORS["text"]
+        )
+        self.sched_start_entry.grid(row=0, column=1, padx=4)
+        if self._is_edit and self._project.schedule_start:
+            self.sched_start_entry.insert(0, self._project.schedule_start)
+            
+        # Stop Time
+        ctk.CTkLabel(time_frame, text="Stop:", font=ctk.CTkFont(size=11), text_color=_COLORS["subtext"]).grid(row=0, column=2, padx=(8, 4))
+        self.sched_stop_entry = ctk.CTkEntry(
+            time_frame, width=60, height=28, placeholder_text="18:00",
+            fg_color=_COLORS["mantle"], border_color=_COLORS["overlay"],
+            text_color=_COLORS["text"]
+        )
+        self.sched_stop_entry.grid(row=0, column=3, padx=4)
+        if self._is_edit and self._project.schedule_stop:
+            self.sched_stop_entry.insert(0, self._project.schedule_stop)
+
+        # Switch
+        self.sched_enabled_var = ctk.BooleanVar(value=self._project.schedule_enabled if self._is_edit else False)
+        ctk.CTkSwitch(
+            sched_row,
+            text="",
+            variable=self.sched_enabled_var,
+            onvalue=True, offvalue=False,
+            width=50,
+            progress_color=_COLORS["blue"],
+            button_color=_COLORS["text"],
+            button_hover_color=_COLORS["blue"],
+            command=self._toggle_scheduling_ui
+        ).grid(row=0, column=3, padx=(0, 16), pady=(10, 0), sticky="ne")
+
+        # ── Recurrence Days (Hidden by default, shown if enabled) ──────
+        self.days_outer_frame = ctk.CTkFrame(sched_row, fg_color="transparent")
+        # Initialize the days frame state
+        self._setup_days_ui(self.days_outer_frame)
+        
+        # Initial visibility - Positioned in row 3 now
+        if self.sched_enabled_var.get():
+            self.days_outer_frame.grid(row=3, column=1, columnspan=3, sticky="ew", padx=16, pady=(0, 8))
+
         # ── Action buttons ─────────────────────────────────────────────
         btn_frame = ctk.CTkFrame(scroll, fg_color="transparent")
-        btn_frame.grid(row=3, column=0, padx=16, pady=(16, 24), sticky="e")
+        btn_frame.grid(row=7, column=0, padx=16, pady=(16, 24), sticky="e")
 
         ctk.CTkButton(
             btn_frame,
@@ -177,6 +263,113 @@ class ProjectFormPanel(ctk.CTkFrame):
             anchor="e",
         ).grid(row=row, column=0, padx=(16, 8), pady=10, sticky="e")
         return row
+
+    def _section_label(self, parent, text: str, row: int):
+        frame = ctk.CTkFrame(parent, fg_color="transparent")
+        frame.grid(row=row, column=0, sticky="ew", padx=16, pady=(10, 2))
+        ctk.CTkLabel(
+            frame,
+            text=text.upper(),
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color=_COLORS["subtext"],
+        ).pack(side="left")
+        ctk.CTkFrame(frame, height=1, fg_color=_COLORS["overlay"]).pack(
+            side="left", fill="x", expand=True, padx=(8, 0)
+        )
+
+    def _option_row(self, parent, label: str, description: str, row: int):
+        row_frame = ctk.CTkFrame(parent, fg_color=_COLORS["surface"], corner_radius=10)
+        row_frame.grid(row=row, column=0, sticky="ew", padx=16, pady=4)
+        
+        # Column 1: Labels (Flexible weight, guaranteed minimum width)
+        # Column 2 & 3: Controls (Fixed width)
+        row_frame.grid_columnconfigure(1, weight=1, minsize=220)
+        row_frame.grid_columnconfigure(2, weight=0)
+        row_frame.grid_columnconfigure(3, weight=0)
+
+        # Title Label - Spans Title and Time areas to prevent cutoff
+        l_label = ctk.CTkLabel(
+            row_frame, text=label,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color=_COLORS["text"],
+            anchor="nw",
+            justify="left",
+            wraplength=350 # Sufficient room for title
+        )
+        l_label.grid(row=0, column=1, columnspan=2, padx=(16, 8), pady=(10, 2), sticky="new")
+
+        # Description Label (if exists) - Full width
+        if description:
+            d_label = ctk.CTkLabel(
+                row_frame, text=description,
+                font=ctk.CTkFont(size=11),
+                text_color=_COLORS["subtext"],
+                anchor="nw",
+                justify="left",
+                wraplength=480 # Full panel width wrap
+            )
+            d_label.grid(row=1, column=1, columnspan=3, padx=(16, 16), pady=(0, 6), sticky="new")
+        else:
+            row_frame.grid_rowconfigure(0, weight=1, pad=12)
+
+        return row_frame
+
+    def _setup_days_ui(self, parent):
+        """Build the recurrence days selector UI."""
+        ctk.CTkLabel(
+            parent, text="RECURRENCE DAYS",
+            font=ctk.CTkFont(size=9, weight="bold"),
+            text_color=_COLORS["subtext"],
+            anchor="w"
+        ).grid(row=0, column=0, sticky="w", pady=(0, 2))
+
+        days_inner = ctk.CTkFrame(parent, fg_color="transparent")
+        days_inner.grid(row=1, column=0, sticky="w")
+        
+        self.day_vars = {} 
+        day_labels = [("Sun", "S"), ("Mon", "M"), ("Tue", "T"), ("Wed", "W"), ("Thu", "T"), ("Fri", "F"), ("Sat", "S")]
+        
+        # Default to ALL OFF for new projects
+        saved_days = (self._project.schedule_days or "").split(",") if self._is_edit else []
+        
+        for i, (full, short) in enumerate(day_labels):
+            is_sel = str(i) in saved_days if saved_days or self._is_edit else False
+            btn, var = self._day_pill(days_inner, short, i, is_sel)
+            btn.pack(side="left", padx=3)
+            self.day_vars[i] = var
+
+    def _day_pill(self, parent, text: str, day_id: int, selected: bool):
+        """Create a rounded square toggle button for a day of the week with glow effect."""
+        var = ctk.BooleanVar(value=selected)
+        btn = ctk.CTkButton(
+            parent, text=text, width=40, height=40,
+            fg_color=_COLORS["overlay"] if not selected else _COLORS["blue"],
+            hover_color="#585b70" if not selected else "#a6c9ff",
+            text_color=_COLORS["text"] if not selected else "#11111b",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            corner_radius=10,
+            border_width=2 if selected else 0,
+            border_color="#b4befe" if selected else _COLORS["overlay"],
+            command=lambda: self._toggle_day(btn, var)
+        )
+        return btn, var
+
+    def _toggle_day(self, btn, var):
+        val = not var.get()
+        var.set(val)
+        btn.configure(
+            fg_color=_COLORS["blue"] if val else _COLORS["overlay"],
+            text_color="#11111b" if val else _COLORS["text"],
+            border_width=2 if val else 0,
+            border_color="#b4befe" if val else _COLORS["overlay"]
+        )
+
+    def _toggle_scheduling_ui(self):
+        """Show/hide day selector based on switch state."""
+        if self.sched_enabled_var.get():
+            self.days_outer_frame.grid(row=3, column=1, columnspan=3, sticky="ew", padx=16, pady=(0, 6))
+        else:
+            self.days_outer_frame.grid_forget()
 
     # ------------------------------------------------------------------
     # Add form
@@ -381,6 +574,13 @@ class ProjectFormPanel(ctk.CTkFrame):
         name = self.name_entry.get().strip()
         entry = self.entry_entry.get().strip()
         python = self.python_entry.get().strip()
+        auto_start = self.auto_start_var.get()
+        sched_enabled = self.sched_enabled_var.get()
+        sched_start = self.sched_start_entry.get().strip() or None
+        sched_stop = self.sched_stop_entry.get().strip() or None
+        
+        selected_days = [str(i) for i, var in self.day_vars.items() if var.get()]
+        sched_days = ",".join(selected_days) if selected_days else None
 
         if not folder:
             messagebox.showerror("Error", "Please select a project folder")
@@ -399,6 +599,11 @@ class ProjectFormPanel(ctk.CTkFrame):
             project = create_project(
                 name=name, folder_path=folder,
                 entrypoint=entry, interpreter_path=python,
+                auto_start=auto_start,
+                schedule_enabled=sched_enabled,
+                schedule_start=sched_start,
+                schedule_stop=sched_stop,
+                schedule_days=sched_days,
             )
             if self._on_saved:
                 self._on_saved(project)
@@ -411,6 +616,13 @@ class ProjectFormPanel(ctk.CTkFrame):
         name = self.name_entry.get().strip()
         entry = self.entry_var.get()
         python = self.python_entry.get().strip()
+        auto_start = self.auto_start_var.get()
+        sched_enabled = self.sched_enabled_var.get()
+        sched_start = self.sched_start_entry.get().strip() or None
+        sched_stop = self.sched_stop_entry.get().strip() or None
+        
+        selected_days = [str(i) for i, var in self.day_vars.items() if var.get()]
+        sched_days = ",".join(selected_days) if selected_days else None
 
         if not name:
             messagebox.showerror("Error", "Please enter a project name")
@@ -426,6 +638,11 @@ class ProjectFormPanel(ctk.CTkFrame):
             project = update_project(
                 project_id=self._project.id,
                 name=name, entrypoint=entry, interpreter_path=python,
+                auto_start=auto_start,
+                schedule_enabled=sched_enabled,
+                schedule_start=sched_start,
+                schedule_stop=sched_stop,
+                schedule_days=sched_days,
             )
             if self._on_saved:
                 self._on_saved(project)

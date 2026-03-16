@@ -356,6 +356,23 @@ class LogPanel(ctk.CTkFrame):
         if not line.endswith("\n"):
             self.log_text.insert("end", "\n")
 
+    def update_last_log_line(self, project_id: int, prefix: str, new_line: str):
+        """Replace the last log line if it starts with the given prefix, otherwise add a new line."""
+        if project_id not in self.logs or not self.logs[project_id]:
+            self.add_log(project_id, new_line)
+            return
+
+        # Check if the last line matches the prefix
+        if self.logs[project_id][-1].startswith(prefix):
+            self.logs[project_id][-1] = new_line
+            # If current view is this project, we need to refresh or specifically update the line
+            if project_id == self.current_project_id:
+                # Optimized approach: if it's the last line, we can try to replace just that
+                # But for simplicity in a CTkTextbox, we'll just refresh if it's visible
+                self._display_logs()
+        else:
+            self.add_log(project_id, new_line)
+
     def _append_line(self, line: str):
         """Append a single line to the log display."""
         self.log_text.configure(state="normal")

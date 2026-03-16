@@ -4,7 +4,8 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 from hamal.core.config import APP_NAME, APP_VERSION, load_settings
-from hamal.core.process_manager import ProcessManager
+from hamal.core.process_manager import ProcessManager, ProcessStatus
+from hamal.database.crud import get_all_projects, get_project_by_id
 from hamal.ui.dashboard import Dashboard
 from hamal.ui.log_panel import LogPanel
 from hamal.ui.icons import get_icons_dir
@@ -101,6 +102,11 @@ class MainWindow(ctk.CTk):
         # Build UI
         self._setup_menu()
         self._setup_ui()
+        
+        # Initialize auto-run and scheduling
+        self._auto_start_timers = {} # project_id -> remaining_seconds
+        self._init_auto_start()
+        self._init_scheduling()
 
         # Handle window close
         self.protocol("WM_DELETE_WINDOW", self._on_closing)
@@ -590,3 +596,91 @@ class MainWindow(ctk.CTk):
         """Exit the application from the tray 'Exit' menu item."""
         self.process_manager.stop_all()
         self.destroy()
+
+    def _init_auto_start(self):
+        """Find projects with auto_start enabled and start the countdown."""
+        projects = get_all_projects()
+        for project in projects:
+            if project.auto_start:
+                status = self.process_manager.get_status(project.id)
+                from hamal.core.process_manager import ProcessStatus  # pylint: disable=import-outside-toplevel
+                if status in (ProcessStatus.STOPPED, ProcessStatus.CRASHED):
+                    self._auto_start_timers[project.id] = 10
+        
+        if self._auto_start_timers:
+            self._auto_start_tick()
+
+    def _init_scheduling(self):
+        """Display schedule info in logs and start the scheduling tick."""
+        projects = get_all_projects()
+        for p in projects:
+            if p.schedule_enabled and p.schedule_start and p.schedule_stop:
+                msg = f"[HAMAL] 📅 Scheduled to run from {p.schedule_start} to {p.schedule_stop}"
+                self.log_panel.add_log(p.id, msg)
+        
+        self._schedule_tick()
+
+    def _schedule_tick(self):
+        """Check every 30 seconds if any project should start or stop based on schedule."""
+        from datetime import datetime
+        now = datetime.now()
+        now_str = now.strftime("%H:%M")
+        # %w returns 0 for Sunday, 1 for Monday, etc.
+        today_str = now.strftime("%w")
+        
+        projects = get_all_projects()
+        for p in projects:
+            if not p.schedule_enabled or not p.schedule_start or not p.schedule_stop:
+                continue
+            
+            # Check if today is one of the scheduled days
+            allowed_days = (p.schedule_days or "0,1,2,3,4,5,6").split(",")
+            if today_str not in allowed_days:
+                continue
+                
+            status = self.process_manager.get_status(p.id)
+            
+            # Start logic
+            if now_str == p.schedule_start:
+                if status in (ProcessStatus.STOPPED, ProcessStatus.CRASHED):
+                    self.log_panel.add_log(p.id, f"[HAMAL] 🕒 Scheduled start time reached ({p.schedule_start}). Starting...")
+                    self.process_manager.start_project(p)
+            
+            # Stop logic
+            elif now_str == p.schedule_stop:
+                if status == ProcessStatus.RUNNING:
+                    self.log_panel.add_log(p.id, f"[HAMAL] 🕒 Scheduled stop time reached ({p.schedule_stop}). Stopping...")
+                    self.process_manager.stop_project(p.id)
+        
+        # Check again in 30 seconds
+        self.after(30000, self._schedule_tick)
+
+    def _auto_start_tick(self):
+        """Update countdown for auto-starting projects every second."""
+        if not self._auto_start_timers:
+            return
+
+        to_remove = []
+        for pid, remaining in self._auto_start_timers.items():
+            project = get_project_by_id(pid)
+            if not project:
+                to_remove.append(pid)
+                continue
+
+            if remaining > 0:
+                msg = f"[HAMAL] 🕒 Project scheduled for auto-start in {remaining} seconds..."
+                self.log_panel.update_last_log_line(pid, "[HAMAL] 🕒", msg)
+                self._auto_start_timers[pid] -= 1
+            else:
+                self.log_panel.update_last_log_line(pid, "[HAMAL] 🕒", "[HAMAL] 🚀 Auto-starting now...")
+                self.process_manager.start_project(project)
+                to_remove.append(pid)
+        
+        for pid in to_remove:
+            del self._auto_start_timers[pid]
+            
+        if self._auto_start_timers:
+            self.after(1000, self._auto_start_tick)
+        else:
+            self.status_label.configure(text="Auto-start sequence complete")
+            self.after(3000, self._update_status_bar)

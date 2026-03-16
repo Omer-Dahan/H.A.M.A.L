@@ -1,6 +1,7 @@
 """SQLAlchemy database models."""
 
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import String, DateTime, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -26,6 +27,11 @@ class Project(Base):
     folder_path: Mapped[str] = mapped_column(Text, nullable=False)
     entrypoint: Mapped[str] = mapped_column(String(255), nullable=False, default="main.py")
     interpreter_path: Mapped[str] = mapped_column(Text, nullable=False)
+    auto_start: Mapped[bool] = mapped_column(nullable=False, default=False)
+    schedule_enabled: Mapped[bool] = mapped_column(nullable=False, default=False)
+    schedule_start: Mapped[Optional[str]] = mapped_column(String(5), nullable=True) # HH:MM
+    schedule_stop: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)  # HH:MM
+    schedule_days: Mapped[Optional[str]] = mapped_column(Text, nullable=True)     # 0,1,2,3...
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
@@ -41,4 +47,4 @@ class Project(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<Project(id={self.id}, name='{self.name}')>"
+        return f"<Project(id={self.id}, name='{self.name}', auto_start={self.auto_start})>"

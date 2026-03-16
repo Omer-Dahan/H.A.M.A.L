@@ -2,7 +2,7 @@
 
 import customtkinter as ctk
 
-from hamal.core.config import load_settings, save_settings
+from hamal.core.config import load_settings, save_settings, set_run_on_startup
 
 # Catppuccin Mocha colors (same palette as MainWindow)
 _COLORS = {
@@ -16,16 +16,40 @@ _COLORS = {
 }
 
 
-def _patch_scroll_speed(scroll_frame, lines: int = 3):
-    """Make CTkScrollableFrame scroll faster (Windows default is 1 line per notch)."""
+def _patch_scroll_speed(scroll_frame, lines: int = 55):
+    """Make CTkScrollableFrame scroll significantly faster and smoother."""
     canvas = scroll_frame._parent_canvas  # pylint: disable=protected-access
 
     def _fast_scroll(event):
-        if event.delta:
-            canvas.yview_scroll(-int(event.delta / abs(event.delta)) * lines, "units")
+        try:
+            if not canvas.winfo_exists():
+                return
+            
+            # Check if the mouse is actually over this scrollable frame or its children
+            widget = event.widget
+            is_child = False
+            try:
+                temp = widget
+                while temp:
+                    if temp == scroll_frame:
+                        is_child = True
+                        break
+                    temp = temp.master
+            except (AttributeError, KeyError):
+                pass
+            
+            if not is_child:
+                return
 
-    canvas.bind("<MouseWheel>", _fast_scroll)
-    scroll_frame.bind("<MouseWheel>", _fast_scroll)
+            if event.delta:
+                # Windows delta is 120. Scrolling 55 'units' per notch is snappier.
+                canvas.yview_scroll(-int(event.delta / 120) * lines, "units")
+                return "break"
+        except Exception:
+            pass
+
+    # We use bind_all but with the 'is_child' guard to ensure it works globally but safely
+    scroll_frame.bind_all("<MouseWheel>", _fast_scroll, add="+")
 
 
 class SettingsPanel(ctk.CTkFrame):
@@ -65,6 +89,7 @@ class SettingsPanel(ctk.CTkFrame):
         """Reload settings from disk before showing the panel."""
         self._settings = load_settings()
         self._tray_var.set(self._settings.get("minimize_to_tray", False))
+        self._startup_var.set(self._settings.get("run_on_startup", False))
 
     # ------------------------------------------------------------------
     # UI
@@ -72,20 +97,13 @@ class SettingsPanel(ctk.CTkFrame):
 
     def _setup_ui(self):
         """Build the panel layout."""
-        content = ctk.CTkScrollableFrame(
-            self,
-            fg_color="transparent",
-            scrollbar_button_color=_COLORS["overlay"],
-            scrollbar_button_hover_color=_COLORS["blue"],
-        )
-        content.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
-        content.grid_columnconfigure(0, weight=1)
-        # Speed up mouse-wheel scrolling on Windows
-        _patch_scroll_speed(content)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=0)  # Header
+        self.grid_rowconfigure(1, weight=1)  # Content
 
         # ── Page header (3-column: Back │ Title centered │ Esc) ───────
-        header_frame = ctk.CTkFrame(content, fg_color="transparent")
-        header_frame.grid(row=0, column=0, sticky="ew", padx=8, pady=(12, 4))
+        header_frame = ctk.CTkFrame(self, fg_color="transparent")
+        header_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=(5, 10))
         header_frame.grid_columnconfigure(0, weight=1)
         header_frame.grid_columnconfigure(1, weight=1)
         header_frame.grid_columnconfigure(2, weight=1)
@@ -93,19 +111,19 @@ class SettingsPanel(ctk.CTkFrame):
         ctk.CTkButton(
             header_frame,
             text="← Back",
-            width=90, height=34,
+            width=100, height=35,
             fg_color=_COLORS["surface"],
             hover_color=_COLORS["overlay"],
             text_color=_COLORS["blue"],
             font=ctk.CTkFont(size=14, weight="bold"),
-            corner_radius=8,
+            corner_radius=12,
             command=self._go_back,
-        ).grid(row=0, column=0, sticky="w", padx=(0, 4))
+        ).grid(row=0, column=0, sticky="w", padx=(5, 4))
 
         ctk.CTkLabel(
             header_frame,
             text="Settings",
-            font=ctk.CTkFont(size=17, weight="bold"),
+            font=ctk.CTkFont(size=19, weight="bold"),
             text_color=_COLORS["text"],
             anchor="center",
         ).grid(row=0, column=1, sticky="ew")
@@ -116,15 +134,28 @@ class SettingsPanel(ctk.CTkFrame):
             font=ctk.CTkFont(size=11),
             text_color=_COLORS["subtext"],
             anchor="e",
-        ).grid(row=0, column=2, sticky="e", padx=(4, 8))
+        ).grid(row=0, column=2, sticky="e", padx=(4, 15))
+
+        # ── Scrollable Content Area ────────────────────────────────────
+        content = ctk.CTkScrollableFrame(
+            self,
+            fg_color="transparent",
+            scrollbar_button_color=_COLORS["overlay"],
+            scrollbar_button_hover_color=_COLORS["blue"],
+        )
+        content.grid(row=1, column=0, sticky="nsew", padx=0, pady=0)
+        content.grid_columnconfigure(0, weight=1)
+        # Speed up mouse-wheel scrolling on Windows
+        _patch_scroll_speed(content)
 
         ctk.CTkFrame(content, height=1, fg_color=_COLORS["overlay"]).grid(
-            row=1, column=0, sticky="ew", padx=16, pady=(4, 0)
+            row=0, column=0, sticky="ew", padx=16, pady=(0, 0)
         )
 
         # ── Section: Window ────────────────────────────────────────────
         self._section_label(content, "Window", row=2)
 
+        # -- Minimize to tray --
         tray_row = self._option_row(
             content,
             label="Minimize to tray on close (X button)",
@@ -132,8 +163,6 @@ class SettingsPanel(ctk.CTkFrame):
             row=3,
         )
         self._tray_var = ctk.BooleanVar(value=self._settings.get("minimize_to_tray", False))
-        
-        # Switch on the RIGHT (col=2)
         ctk.CTkSwitch(
             tray_row,
             text="",
@@ -145,14 +174,33 @@ class SettingsPanel(ctk.CTkFrame):
             button_hover_color=_COLORS["blue"],
         ).grid(row=0, column=2, padx=(10, 16), pady=14)
 
+        # -- Run on startup --
+        startup_row = self._option_row(
+            content,
+            label="Launch on Windows startup",
+            description="Automatically starts HAMAL when you log into Windows.",
+            row=4,
+        )
+        self._startup_var = ctk.BooleanVar(value=self._settings.get("run_on_startup", False))
+        ctk.CTkSwitch(
+            startup_row,
+            text="",
+            variable=self._startup_var,
+            onvalue=True, offvalue=False,
+            width=50,
+            progress_color=_COLORS["blue"],
+            button_color=_COLORS["text"],
+            button_hover_color=_COLORS["blue"],
+        ).grid(row=0, column=2, padx=(10, 16), pady=14)
+
         # ── Section: Logs ──────────────────────────────────────────────────
-        self._section_label(content, "Logs", row=4)
+        self._section_label(content, "Logs", row=5)
 
         filter_row = self._option_row(
             content,
             label="Log line color filters",
             description="Highlight lines matching a pattern with a custom color.",
-            row=5,
+            row=6,
         )
         ctk.CTkButton(
             filter_row,
@@ -227,6 +275,13 @@ class SettingsPanel(ctk.CTkFrame):
     def _go_back(self):
         """Save settings and return to the log panel."""
         self._settings["minimize_to_tray"] = self._tray_var.get()
+        
+        # Handle startup registration change
+        new_startup = self._startup_var.get()
+        if new_startup != self._settings.get("run_on_startup", False):
+            set_run_on_startup(new_startup)
+            self._settings["run_on_startup"] = new_startup
+
         save_settings(self._settings)
         if self._on_saved:
             self._on_saved()

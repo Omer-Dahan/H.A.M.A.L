@@ -87,19 +87,13 @@ class LogFilterPanel(ctk.CTkFrame):
 
     def _setup_ui(self):
         """Build the panel layout."""
-        scroll = ctk.CTkScrollableFrame(
-            self,
-            fg_color="transparent",
-            scrollbar_button_color=_COLORS["overlay"],
-            scrollbar_button_hover_color=_COLORS["blue"],
-        )
-        scroll.grid(row=0, column=0, sticky="nsew")
-        scroll.grid_columnconfigure(0, weight=1)
-        _patch_scroll_speed(scroll)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=0)  # Header
+        self.grid_rowconfigure(1, weight=1)  # Content
 
         # ── Page header (3-column: Back │ Title centered │ Esc) ─────────
-        header = ctk.CTkFrame(scroll, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew", padx=8, pady=(12, 4))
+        header = ctk.CTkFrame(self, fg_color="transparent")
+        header.grid(row=0, column=0, sticky="ew", padx=5, pady=(5, 10))
         header.grid_columnconfigure(0, weight=1)
         header.grid_columnconfigure(1, weight=1)
         header.grid_columnconfigure(2, weight=1)
@@ -107,19 +101,19 @@ class LogFilterPanel(ctk.CTkFrame):
         ctk.CTkButton(
             header,
             text="← Back",
-            width=90, height=34,
+            width=100, height=35,
             fg_color=_COLORS["surface"],
             hover_color=_COLORS["overlay"],
             text_color=_COLORS["blue"],
             font=ctk.CTkFont(size=14, weight="bold"),
-            corner_radius=8,
+            corner_radius=12,
             command=self._go_back,
-        ).grid(row=0, column=0, sticky="w", padx=(0, 4))
+        ).grid(row=0, column=0, sticky="w", padx=(5, 4))
 
         ctk.CTkLabel(
             header,
             text="Log Color Filters",
-            font=ctk.CTkFont(size=17, weight="bold"),
+            font=ctk.CTkFont(size=19, weight="bold"),
             text_color=_COLORS["text"],
             anchor="center",
         ).grid(row=0, column=1, sticky="ew")
@@ -130,10 +124,21 @@ class LogFilterPanel(ctk.CTkFrame):
             font=ctk.CTkFont(size=11),
             text_color=_COLORS["subtext"],
             anchor="e",
-        ).grid(row=0, column=2, sticky="e", padx=(4, 8))
+        ).grid(row=0, column=2, sticky="e", padx=(4, 15))
+
+        # ── Scrollable Area ────────────────────────────────────────────
+        scroll = ctk.CTkScrollableFrame(
+            self,
+            fg_color="transparent",
+            scrollbar_button_color=_COLORS["overlay"],
+            scrollbar_button_hover_color=_COLORS["blue"],
+        )
+        scroll.grid(row=1, column=0, sticky="nsew")
+        scroll.grid_columnconfigure(0, weight=1)
+        _patch_scroll_speed(scroll)
 
         ctk.CTkFrame(scroll, height=1, fg_color=_COLORS["overlay"]).grid(
-            row=1, column=0, sticky="ew", padx=16, pady=(4, 8)
+            row=0, column=0, sticky="ew", padx=16, pady=(0, 8)
         )
 
         # ── Filter rows ────────────────────────────────────────────────

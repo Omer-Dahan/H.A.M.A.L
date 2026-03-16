@@ -4,6 +4,7 @@ import sys
 
 import customtkinter as ctk
 
+from hamal.core.config import load_settings, set_run_on_startup
 from hamal.core.single_instance import SingleInstanceManager
 from hamal.database.database import init_database
 from hamal.ui.main_window import MainWindow
@@ -18,6 +19,11 @@ def main():
     # If another instance is already running, send it a FOCUS command and exit.
     if not _instance_manager.ensure_single():
         sys.exit(0)
+
+    # Load settings and sync startup registration
+    settings = load_settings()
+    if settings.get("run_on_startup"):
+        set_run_on_startup(True)
 
     # Initialize database
     init_database()
