@@ -12,12 +12,14 @@ import ctypes
 import socket
 import threading
 import logging
+import sys
 
 logger = logging.getLogger(__name__)
 
 # Unique identifiers for this application
-_MUTEX_NAME = "Global\\HAMAL_SingleInstance_Mutex"
-_IPC_PORT = 19847
+_IS_FROZEN = getattr(sys, "frozen", False)
+_MUTEX_NAME = "Global\\HAMAL_SingleInstance_Mutex" if _IS_FROZEN else "Global\\HAMAL_SingleInstance_Mutex_Dev"
+_IPC_PORT = 19847 if _IS_FROZEN else 19848
 _IPC_HOST = "127.0.0.1"
 _IPC_CMD_FOCUS = b"FOCUS\n"
 
