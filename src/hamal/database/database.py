@@ -36,8 +36,10 @@ def get_session_factory() -> sessionmaker:
 
 def init_database():
     """Initialize the database, creating tables if they don't exist."""
+    print(f"[Database] Initializing... (Path: {get_database_path()})")
     engine = get_engine()
     Base.metadata.create_all(bind=engine)
+    print("[Database] Schema check/creation completed.")
 
     # Simple migration: Add auto_start column if it doesn't exist
     from sqlalchemy import text

@@ -15,6 +15,16 @@ _instance_manager = SingleInstanceManager()
 
 def main():
     """Main entry point for H.A.M.A.L."""
+    # Configure logging to output to console
+    import logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+        stream=sys.stdout
+    )
+    logger = logging.getLogger("hamal.main")
+    logger.info("Application starting...")
+
     # Ensure only one instance runs at a time.
     # If another instance is already running, send it a FOCUS command and exit.
     if not _instance_manager.ensure_single():

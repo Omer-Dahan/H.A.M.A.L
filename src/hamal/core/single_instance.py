@@ -18,7 +18,9 @@ logger = logging.getLogger(__name__)
 
 # Unique identifiers for this application
 _IS_FROZEN = getattr(sys, "frozen", False)
-_MUTEX_NAME = "Global\\HAMAL_SingleInstance_Mutex" if _IS_FROZEN else "Global\\HAMAL_SingleInstance_Mutex_Dev"
+# Using 'Local\' instead of 'Global\' to avoid permission issues; 
+# also added a suffix to ensure it's session-scoped.
+_MUTEX_NAME = "Local\\HAMAL_SingleInstance_Mutex" if _IS_FROZEN else "Local\\HAMAL_SingleInstance_Mutex_Dev"
 _IPC_PORT = 19847 if _IS_FROZEN else 19848
 _IPC_HOST = "127.0.0.1"
 _IPC_CMD_FOCUS = b"FOCUS\n"
@@ -43,12 +45,15 @@ class SingleInstanceManager:
             True  – we are the primary instance (proceed normally).
             False – another instance is running; we sent FOCUS to it.
         """
+        print(f"[SingleInstance] Checking for other instances (Mutex: {_MUTEX_NAME})...")
         if self._try_acquire_mutex():
+            print("[SingleInstance] Primary instance established.")
             # We are the primary instance – start listening for focus commands
             self._start_listener()
             return True
 
         # Another instance is running – tell it to focus
+        print("[SingleInstance] Another instance detected; sending FOCUS command...")
         self._send_focus_command()
         return False
 
