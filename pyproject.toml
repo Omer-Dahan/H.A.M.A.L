@@ -1,6 +1,6 @@
 [project]
 name = "hamal"
-version = "0.1.2"
+version = "0.2.0"
 description = "H.A.M.A.L: Command Center for Python Processes"
 readme = "README.md"
 requires-python = ">=3.10"
