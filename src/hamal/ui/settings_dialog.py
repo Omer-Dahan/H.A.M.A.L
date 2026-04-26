@@ -24,7 +24,7 @@ def _patch_scroll_speed(scroll_frame, lines: int = 55):
         try:
             if not canvas.winfo_exists():
                 return
-            
+
             # Check if the mouse is actually over this scrollable frame or its children
             widget = event.widget
             is_child = False
@@ -37,7 +37,7 @@ def _patch_scroll_speed(scroll_frame, lines: int = 55):
                     temp = temp.master
             except (AttributeError, KeyError):
                 pass
-            
+
             if not is_child:
                 return
 
@@ -241,8 +241,8 @@ class SettingsPanel(ctk.CTkFrame):
 
         l_label = ctk.CTkLabel(
             text_frame, text=label,
-            font=ctk.CTkFont(size=14, weight="bold"), 
-            text_color=_COLORS["text"], 
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color=_COLORS["text"],
             anchor="w",
             justify="left"
         )
@@ -253,8 +253,8 @@ class SettingsPanel(ctk.CTkFrame):
         if description:
             d_label = ctk.CTkLabel(
                 text_frame, text=description,
-                font=ctk.CTkFont(size=11), 
-                text_color=_COLORS["subtext"], 
+                font=ctk.CTkFont(size=11),
+                text_color=_COLORS["subtext"],
                 anchor="w",
                 justify="left"
             )
@@ -275,7 +275,7 @@ class SettingsPanel(ctk.CTkFrame):
     def _go_back(self):
         """Save settings and return to the log panel."""
         self._settings["minimize_to_tray"] = self._tray_var.get()
-        
+
         # Handle startup registration change
         new_startup = self._startup_var.get()
         if new_startup != self._settings.get("run_on_startup", False):

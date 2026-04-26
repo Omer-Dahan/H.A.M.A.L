@@ -6,8 +6,8 @@ from typing import Callable
 import pystray
 from PIL import Image
 
-from hamal.ui.icons import get_icons_dir
 from hamal.core.config import APP_NAME
+from hamal.ui.icons import get_icons_dir
 
 
 def _load_tray_image() -> Image.Image:

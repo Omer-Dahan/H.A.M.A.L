@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Callable, Optional
 
 from hamal.core.log_handler import LogHandler
 from hamal.database.models import Project
@@ -71,6 +71,7 @@ class ProcessManager:
     def __init__(self):
         self._processes: dict[int, ProcessInfo] = {}
         self._project_names: dict[int, str] = {}
+        self._user_stopped: set[int] = set()  # IDs the user asked to stop — exit isn't a crash
         self._lock = threading.Lock()
 
         # Callbacks (set by UI)
@@ -80,7 +81,12 @@ class ProcessManager:
         self.on_crash_detected: Optional[Callable[[int, str, int, str], None]] = None
 
     def get_status(self, project_id: int) -> ProcessStatus:
-        """Get the current status of a project."""
+        """Get the current status of a project.
+
+        If the process has exited but the monitor thread hasn't cleaned up yet,
+        we report the dead status without mutating state — the monitor thread
+        owns cleanup and the crash callback.
+        """
         with self._lock:
             if project_id not in self._processes:
                 return ProcessStatus.STOPPED
@@ -124,6 +130,14 @@ class ProcessManager:
                 if existing.process.poll() is None:
                     logger.warning(f"  [SKIP] Process already running for {project.name}")
                     return False
+                # Stale entry from a dead process the monitor hasn't cleaned up yet.
+                # Drop it so we can start fresh.
+                logger.info(f"  [CLEANUP] Removing stale entry for {project.name}")
+                try:
+                    existing.log_handler.stop_logging()
+                except Exception:  # pylint: disable=broad-exception-caught
+                    pass
+                del self._processes[project.id]
 
         self._emit_status(project.id, ProcessStatus.STARTING.value)
 
@@ -215,16 +229,34 @@ class ProcessManager:
             self.on_log_received(project_id, line)
 
     def stop_project(self, project_id: int) -> bool:
-        """Stop a running project."""
+        """Stop a running project.
+
+        Also handles the case where the process already died but the monitor
+        thread hasn't cleaned up yet — we sync the UI to STOPPED/CRASHED so the
+        user isn't stuck staring at a stale "Running" badge.
+        """
         with self._lock:
             if project_id not in self._processes:
+                # Already gone — make sure UI reflects that.
+                self._emit_status(project_id, ProcessStatus.STOPPED.value)
                 return False
 
             info = self._processes[project_id]
-            if info.process.poll() is not None:
-                return False
+            already_dead = info.process.poll() is not None
+            exit_code = info.process.returncode if already_dead else None
+
+        if already_dead:
+            # The monitor thread will (or already did) emit the real CRASHED/STOPPED
+            # status and run cleanup. Nudge the UI immediately so the user gets
+            # feedback even if the monitor's callback is delayed.
+            final = ProcessStatus.CRASHED if exit_code != 0 else ProcessStatus.STOPPED
+            self._emit_status(project_id, final.value)
+            return False
 
         self._emit_status(project_id, ProcessStatus.STOPPING.value)
+
+        with self._lock:
+            self._user_stopped.add(project_id)
 
         try:
             info.process.terminate()
@@ -235,12 +267,9 @@ class ProcessManager:
                 info.process.kill()
                 info.process.wait()
 
-            info.log_handler.stop_logging()
-
-            with self._lock:
-                del self._processes[project_id]
-
-            self._emit_status(project_id, ProcessStatus.STOPPED.value)
+            # Cleanup is owned by _monitor_process — it will remove the dict
+            # entry and emit the final STOPPED status. Don't double-clean here,
+            # or the monitor will read a missing entry and skip its callbacks.
             return True
 
         except Exception as e:  # pylint: disable=broad-exception-caught
@@ -293,14 +322,17 @@ class ProcessManager:
                 info.log_handler.stop_logging()
                 del self._processes[project_id]
             project_name = self._project_names.get(project_id, f"Project {project_id}")
+            user_stopped = project_id in self._user_stopped
+            self._user_stopped.discard(project_id)
 
-        status = ProcessStatus.CRASHED if exit_code != 0 else ProcessStatus.STOPPED
+        is_crash = exit_code != 0 and not user_stopped
+        status = ProcessStatus.CRASHED if is_crash else ProcessStatus.STOPPED
         self._emit_status(project_id, status.value)
 
         if self.on_process_exited:
             self.on_process_exited(project_id, exit_code)
 
-        if exit_code != 0 and self.on_crash_detected:
+        if is_crash and self.on_crash_detected:
             self.on_crash_detected(project_id, project_name, exit_code, recent_logs)
 
     def get_log_handler(self, project_id: int) -> Optional[LogHandler]:

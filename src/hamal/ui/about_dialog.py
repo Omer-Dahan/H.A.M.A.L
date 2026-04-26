@@ -1,7 +1,9 @@
 """About dialog window."""
 
 import customtkinter as ctk
+
 from hamal.core.config import APP_NAME, APP_VERSION
+
 
 class AboutDialog(ctk.CTkToplevel):
     """Dialog displaying application information."""
@@ -29,6 +31,7 @@ class AboutDialog(ctk.CTkToplevel):
 
         # Logo
         from PIL import Image  # pylint: disable=import-outside-toplevel
+
         from hamal.ui.icons import get_icons_dir  # pylint: disable=import-outside-toplevel
 
         try:

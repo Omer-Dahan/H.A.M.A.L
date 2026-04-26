@@ -9,7 +9,6 @@ import customtkinter as ctk
 
 from hamal.core.config import get_project_logs_dir
 
-
 # Catppuccin Mocha colors
 # pylint: disable=duplicate-code
 COLORS = {
@@ -126,7 +125,7 @@ class LogPanel(ctk.CTkFrame):
         self.log_text.tag_config("warn_lvl", foreground=COLORS["yellow"])
         self.log_text.tag_config("err_lvl", foreground=COLORS["red"])
         self.log_text.tag_config("success_lvl", foreground=COLORS["green"])
-        
+
         self.log_text.tag_config("info", foreground=COLORS["text"])
         self.log_text.tag_config("error", foreground=COLORS["red"])
         self.log_text.tag_config("warn", foreground=COLORS["yellow"])
@@ -156,7 +155,7 @@ class LogPanel(ctk.CTkFrame):
                                    activebackground=COLORS["overlay"], activeforeground=COLORS["text"],
                                    relief="flat", borderwidth=1,
                                    font=("Segoe UI", 19))
-        
+
         self.context_menu.add_command(label="Copy (Ctrl+C)", command=self._copy_selection)
         self.context_menu.add_separator()
         self.context_menu.add_command(label="Copy All", command=self._copy_all)
@@ -188,7 +187,7 @@ class LogPanel(ctk.CTkFrame):
         except tk.TclError:
             pass # No selection
         return "break" # Prevent default behavior
-            
+
     def _copy_all(self):
         """Copy all log text to clipboard."""
         all_text = self.log_text.get("1.0", "end-1c")
@@ -277,7 +276,7 @@ class LogPanel(ctk.CTkFrame):
         self.log_text.configure(state="disabled")
         self.log_text.see("end")
 
-    def _insert_message_with_links(self, text: str, base_tag: str = None):
+    def _insert_message_with_links(self, text: str, base_tag: Optional[str] = None):
         """Helper to insert text while processing links."""
         link_pattern = r"(https?://[^\s]+|[a-zA-Z]:\\[^\s]+|/[^\s]+)"
         parts = re.split(link_pattern, text)
@@ -296,13 +295,13 @@ class LogPanel(ctk.CTkFrame):
         match = re.match(r"^(\[\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}(?:,\d{3})?\])\s+([^ ]+:\d+)\s+([A-Z]\])(.*)", line)
         if match:
             timestamp, file_info, level, message = match.groups()
-            
+
             # Insert Timestamp (green)
             self.log_text.insert("end", timestamp + " ", "timestamp")
-            
+
             # Insert File path/line (mauve)
             self.log_text.insert("end", file_info + " ", "file")
-            
+
             # Insert Level indicator
             lvl_tag = "info_lvl"
             base_msg_tag = None
@@ -316,9 +315,9 @@ class LogPanel(ctk.CTkFrame):
                 lvl_tag = "info_lvl"
                 if "✅" in message:
                     base_msg_tag = "success"
-                
+
             self.log_text.insert("end", level, lvl_tag)
-            
+
             # Insert the message body natively and handle links
             self._insert_message_with_links(message, base_msg_tag)
             self.log_text.insert("end", "\n")

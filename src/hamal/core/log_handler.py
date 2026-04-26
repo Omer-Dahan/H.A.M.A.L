@@ -26,8 +26,12 @@ class LogHandler:
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         self.log_path = logs_dir / f"{timestamp}.log"
 
-        # Open file for writing
-        self.log_file = open(self.log_path, "w", encoding="utf-8", buffering=1)  # pylint: disable=consider-using-with
+        # Open file for writing (will be closed by stop_logging)
+        try:
+            self.log_file = open(self.log_path, "w", encoding="utf-8", buffering=1)
+        except OSError as e:
+            self.log_file = None
+            raise IOError(f"Failed to open log file {self.log_path}: {e}") from e
 
         # Write header
         self.log_file.write(f"=== H.A.M.A.L Log Started: {datetime.now().isoformat()} ===\n")

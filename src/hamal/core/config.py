@@ -101,20 +101,20 @@ def set_run_on_startup(enabled: bool) -> bool:
         return False
 
     app_name = "HAMAL"
-    
+
     # Get the actual path to the executable
     if getattr(sys, 'frozen', False):
         # Running as compiled EXE
         app_path = f'"{sys.executable}"'
     else:
-        # Running as script - we probably don't want to register the python interp 
+        # Running as script - we probably don't want to register the python interp
         # but for dev testing we'll allow it. In production (installer) it will be frozen.
         app_path = f'"{sys.executable}" "{Path(__file__).parents[2] / "hamal" / "main.py"}"'
 
     try:
         key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
-        
+
         if enabled:
             winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, app_path)
         else:
@@ -122,7 +122,7 @@ def set_run_on_startup(enabled: bool) -> bool:
                 winreg.DeleteValue(key, app_name)
             except FileNotFoundError:
                 pass  # Already gone
-                
+
         winreg.CloseKey(key)
         return True
     except OSError:

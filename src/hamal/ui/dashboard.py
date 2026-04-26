@@ -6,14 +6,12 @@ from typing import Callable, Optional
 
 import customtkinter as ctk
 
-from hamal.database.crud import get_all_projects, get_project_by_id, delete_project
-from hamal.database.models import Project
 from hamal.core.process_manager import ProcessManager, ProcessStatus
-from hamal.utils.helpers import format_uptime
-from hamal.ui.icons import Icons
+from hamal.database.crud import delete_project, get_all_projects, get_project_by_id
+from hamal.database.models import Project
 from hamal.ui.animated_button import create_depth_button
-
-
+from hamal.ui.icons import Icons
+from hamal.utils.helpers import format_uptime
 
 # Catppuccin Mocha colors
 # pylint: disable=duplicate-code
@@ -441,7 +439,9 @@ class Dashboard(ctk.CTkFrame):
                 self.on_project_form(project=project)
         else:
             # Fallback: legacy dialog
-            from hamal.ui.dialogs import EditProjectDialog  # pylint: disable=import-outside-toplevel
+            from hamal.ui.dialogs import (
+                EditProjectDialog,  # pylint: disable=import-outside-toplevel
+            )
             project = get_project_by_id(project_id)
             if project:
                 dialog = EditProjectDialog(self.winfo_toplevel(), project)
@@ -481,9 +481,14 @@ class Dashboard(ctk.CTkFrame):
             pass
 
     def _update_uptimes(self):
-        """Update uptime display for running projects."""
+        """Update uptime + status display for all rows.
+
+        Polling status here is a safety net: if a status_changed callback gets
+        dropped or arrives out of order, the UI still converges within ~1s.
+        """
         for project_id, row in self.project_rows.items():
             status = self.process_manager.get_status(project_id)
+            self._update_row_status(project_id, status)
             if status == ProcessStatus.RUNNING:
                 uptime = self.process_manager.get_uptime(project_id)
                 if uptime is not None:

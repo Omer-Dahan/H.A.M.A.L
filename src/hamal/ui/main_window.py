@@ -1,20 +1,20 @@
 """Main application window using CustomTkinter."""
 
 from tkinter import messagebox
+
 import customtkinter as ctk
 
 from hamal.core.config import APP_NAME, APP_VERSION, load_settings
 from hamal.core.process_manager import ProcessManager, ProcessStatus
 from hamal.database.crud import get_all_projects, get_project_by_id
-from hamal.ui.dashboard import Dashboard
-from hamal.ui.log_panel import LogPanel
-from hamal.ui.icons import get_icons_dir
 from hamal.ui.about_dialog import AboutDialog
-from hamal.ui.settings_dialog import SettingsPanel
+from hamal.ui.dashboard import Dashboard
+from hamal.ui.icons import get_icons_dir
 from hamal.ui.log_filter_dialog import LogFilterPanel
+from hamal.ui.log_panel import LogPanel
 from hamal.ui.project_form_panel import ProjectFormPanel
+from hamal.ui.settings_dialog import SettingsPanel
 from hamal.ui.tray import TrayIcon
-
 
 # Catppuccin Mocha colors
 COLORS = {
@@ -39,6 +39,9 @@ class MainWindow(ctk.CTk):
 
     def __init__(self, instance_manager=None):
         super().__init__()
+
+        # Keep instance manager ref for cleanup on close
+        self._instance_manager = instance_manager
 
         # Register focus callback so a second launch brings this window up
         if instance_manager is not None:
@@ -102,7 +105,7 @@ class MainWindow(ctk.CTk):
         # Build UI
         self._setup_menu()
         self._setup_ui()
-        
+
         # Initialize auto-run and scheduling
         self._auto_start_timers = {} # project_id -> remaining_seconds
         self._init_auto_start()
@@ -558,8 +561,22 @@ class MainWindow(ctk.CTk):
     def _do_bring_to_front(self):
         """Actual window-raise logic (must run on the Tkinter main thread)."""
         self.deiconify()      # Restore if minimised
+        self._fix_dwm_transparency()
         self.lift()           # Raise above other windows
         self.focus_force()    # Steal keyboard focus
+
+    def _fix_dwm_transparency(self):
+        """Force DWM to recompose the window.
+
+        Why: after withdraw/deiconify cycles (tray restore, second-instance
+        focus) Windows DWM occasionally leaves the window content unrendered,
+        making it appear nearly transparent. Toggling alpha forces a redraw.
+        """
+        try:
+            self.attributes("-alpha", 0.99)
+            self.after(50, lambda: self.attributes("-alpha", 1.0))
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
 
     def _on_closing(self):
         """Handle window close button.
@@ -583,19 +600,25 @@ class MainWindow(ctk.CTk):
             ):
                 return
 
+        self._shutdown()
+
+    def _shutdown(self):
+        """Clean shutdown: stop processes and release singleton mutex."""
         self.process_manager.stop_all()
+        if self._instance_manager:
+            self._instance_manager.release()
         self.destroy()
 
     def _restore_from_tray(self):
         """Restore the window when the user clicks 'Show' in the tray menu."""
         self.deiconify()
+        self._fix_dwm_transparency()
         self.lift()
         self.focus_force()
 
     def _force_quit(self):
         """Exit the application from the tray 'Exit' menu item."""
-        self.process_manager.stop_all()
-        self.destroy()
+        self._shutdown()
 
     def _init_auto_start(self):
         """Find projects with auto_start enabled and start the countdown."""
@@ -603,10 +626,12 @@ class MainWindow(ctk.CTk):
         for project in projects:
             if project.auto_start:
                 status = self.process_manager.get_status(project.id)
-                from hamal.core.process_manager import ProcessStatus  # pylint: disable=import-outside-toplevel
+                from hamal.core.process_manager import (
+                    ProcessStatus,  # pylint: disable=import-outside-toplevel
+                )
                 if status in (ProcessStatus.STOPPED, ProcessStatus.CRASHED):
                     self._auto_start_timers[project.id] = 10
-        
+
         if self._auto_start_timers:
             self._auto_start_tick()
 
@@ -617,7 +642,7 @@ class MainWindow(ctk.CTk):
             if p.schedule_enabled and p.schedule_start and p.schedule_stop:
                 msg = f"[HAMAL] 📅 Scheduled to run from {p.schedule_start} to {p.schedule_stop}"
                 self.log_panel.add_log(p.id, msg)
-        
+
         self._schedule_tick()
 
     def _schedule_tick(self):
@@ -627,31 +652,31 @@ class MainWindow(ctk.CTk):
         now_str = now.strftime("%H:%M")
         # %w returns 0 for Sunday, 1 for Monday, etc.
         today_str = now.strftime("%w")
-        
+
         projects = get_all_projects()
         for p in projects:
             if not p.schedule_enabled or not p.schedule_start or not p.schedule_stop:
                 continue
-            
+
             # Check if today is one of the scheduled days
             allowed_days = (p.schedule_days or "0,1,2,3,4,5,6").split(",")
             if today_str not in allowed_days:
                 continue
-                
+
             status = self.process_manager.get_status(p.id)
-            
+
             # Start logic
             if now_str == p.schedule_start:
                 if status in (ProcessStatus.STOPPED, ProcessStatus.CRASHED):
                     self.log_panel.add_log(p.id, f"[HAMAL] 🕒 Scheduled start time reached ({p.schedule_start}). Starting...")
                     self.process_manager.start_project(p)
-            
+
             # Stop logic
             elif now_str == p.schedule_stop:
                 if status == ProcessStatus.RUNNING:
                     self.log_panel.add_log(p.id, f"[HAMAL] 🕒 Scheduled stop time reached ({p.schedule_stop}). Stopping...")
                     self.process_manager.stop_project(p.id)
-        
+
         # Check again in 30 seconds
         self.after(30000, self._schedule_tick)
 
@@ -675,10 +700,10 @@ class MainWindow(ctk.CTk):
                 self.log_panel.update_last_log_line(pid, "[HAMAL] 🕒", "[HAMAL] 🚀 Auto-starting now...")
                 self.process_manager.start_project(project)
                 to_remove.append(pid)
-        
+
         for pid in to_remove:
             del self._auto_start_timers[pid]
-            
+
         if self._auto_start_timers:
             self.after(1000, self._auto_start_tick)
         else:

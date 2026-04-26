@@ -3,8 +3,9 @@
 import sys
 from pathlib import Path
 
-from PIL import Image
 import customtkinter as ctk
+from PIL import Image
+
 
 def get_icons_dir() -> Path:
     """Get the icons directory path, works both in dev and packaged app."""
@@ -31,7 +32,7 @@ class Icons:
             return
 
         icon_names = [
-            "play", "stop", "plus", "settings", 
+            "play", "stop", "plus", "settings",
             "trash", "logs", "folder", "clear"
         ]
 

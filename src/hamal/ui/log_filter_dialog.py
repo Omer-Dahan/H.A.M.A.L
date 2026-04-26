@@ -1,9 +1,10 @@
 """Log color filter panel – embedded inside the main window (replaces the log panel)."""
 
 import re
+
 import customtkinter as ctk
 
-from hamal.core.config import load_settings, save_settings, _DEFAULT_SETTINGS
+from hamal.core.config import _DEFAULT_SETTINGS, load_settings, save_settings
 from hamal.ui.settings_dialog import _patch_scroll_speed
 
 # Catppuccin Mocha palette – shown as color chips

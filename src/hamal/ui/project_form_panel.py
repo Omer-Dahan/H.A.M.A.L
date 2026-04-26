@@ -1,15 +1,18 @@
 """In-app project form panel – replaces the log panel when adding or editing a project."""
 
+import os
+import subprocess
+import threading
 from pathlib import Path
 from tkinter import filedialog, messagebox
-from typing import Optional, Callable
+from typing import Callable, Optional
 
 import customtkinter as ctk
 
-from hamal.database.models import Project
 from hamal.database.crud import create_project, update_project
-from hamal.utils.helpers import detect_python_interpreter, detect_entry_file, get_python_files
+from hamal.database.models import Project
 from hamal.ui.settings_dialog import _patch_scroll_speed
+from hamal.utils.helpers import detect_entry_file, detect_python_interpreter, get_python_files
 
 _COLORS = {
     "base":    "#1e1e2e",
@@ -175,11 +178,11 @@ class ProjectFormPanel(ctk.CTkFrame):
             description="Automatically start and stop the script at specific times.",
             row=6,
         )
-        
+
         # Add time inputs to a NEW row (row 2) to allow text to be full width
         time_frame = ctk.CTkFrame(sched_row, fg_color="transparent")
         time_frame.grid(row=2, column=1, columnspan=3, padx=16, pady=(0, 4), sticky="w")
-        
+
         # Start Time
         ctk.CTkLabel(time_frame, text="Start:", font=ctk.CTkFont(size=11), text_color=_COLORS["subtext"]).grid(row=0, column=0, padx=4)
         self.sched_start_entry = ctk.CTkEntry(
@@ -190,7 +193,7 @@ class ProjectFormPanel(ctk.CTkFrame):
         self.sched_start_entry.grid(row=0, column=1, padx=4)
         if self._is_edit and self._project.schedule_start:
             self.sched_start_entry.insert(0, self._project.schedule_start)
-            
+
         # Stop Time
         ctk.CTkLabel(time_frame, text="Stop:", font=ctk.CTkFont(size=11), text_color=_COLORS["subtext"]).grid(row=0, column=2, padx=(8, 4))
         self.sched_stop_entry = ctk.CTkEntry(
@@ -220,14 +223,37 @@ class ProjectFormPanel(ctk.CTkFrame):
         self.days_outer_frame = ctk.CTkFrame(sched_row, fg_color="transparent")
         # Initialize the days frame state
         self._setup_days_ui(self.days_outer_frame)
-        
+
         # Initial visibility - Positioned in row 3 now
         if self.sched_enabled_var.get():
             self.days_outer_frame.grid(row=3, column=1, columnspan=3, sticky="ew", padx=16, pady=(0, 8))
 
+        # ── Dependencies section (Edit mode only — needs a saved folder) ──
+        if self._is_edit:
+            self._section_label(scroll, "Dependencies", row=7)
+
+            req_row = self._option_row(
+                scroll,
+                label="Install requirements.txt",
+                description="Runs `pip install -r requirements.txt` using this project's Python interpreter.",
+                row=8,
+            )
+            self._req_btn = ctk.CTkButton(
+                req_row,
+                text="Install",
+                width=100, height=32,
+                fg_color=_COLORS["blue"],
+                hover_color="#74a8e8",
+                text_color="#1e1e2e",
+                font=ctk.CTkFont(size=13, weight="bold"),
+                corner_radius=8,
+                command=self._on_install_requirements,
+            )
+            self._req_btn.grid(row=0, column=3, padx=(8, 16), pady=14, sticky="e")
+
         # ── Action buttons ─────────────────────────────────────────────
         btn_frame = ctk.CTkFrame(scroll, fg_color="transparent")
-        btn_frame.grid(row=7, column=0, padx=16, pady=(16, 24), sticky="e")
+        btn_frame.grid(row=9, column=0, padx=16, pady=(16, 24), sticky="e")
 
         ctk.CTkButton(
             btn_frame,
@@ -280,7 +306,7 @@ class ProjectFormPanel(ctk.CTkFrame):
     def _option_row(self, parent, label: str, description: str, row: int):
         row_frame = ctk.CTkFrame(parent, fg_color=_COLORS["surface"], corner_radius=10)
         row_frame.grid(row=row, column=0, sticky="ew", padx=16, pady=4)
-        
+
         # Column 1: Labels (Flexible weight, guaranteed minimum width)
         # Column 2 & 3: Controls (Fixed width)
         row_frame.grid_columnconfigure(1, weight=1, minsize=220)
@@ -325,20 +351,20 @@ class ProjectFormPanel(ctk.CTkFrame):
 
         days_inner = ctk.CTkFrame(parent, fg_color="transparent")
         days_inner.grid(row=1, column=0, sticky="w")
-        
-        self.day_vars = {} 
+
+        self.day_vars = {}
         day_labels = [("Sun", "S"), ("Mon", "M"), ("Tue", "T"), ("Wed", "W"), ("Thu", "T"), ("Fri", "F"), ("Sat", "S")]
-        
+
         # Default to ALL OFF for new projects
         saved_days = (self._project.schedule_days or "").split(",") if self._is_edit else []
-        
-        for i, (full, short) in enumerate(day_labels):
+
+        for i, (_full, short) in enumerate(day_labels):
             is_sel = str(i) in saved_days if saved_days or self._is_edit else False
             btn, var = self._day_pill(days_inner, short, i, is_sel)
             btn.pack(side="left", padx=3)
             self.day_vars[i] = var
 
-    def _day_pill(self, parent, text: str, day_id: int, selected: bool):
+    def _day_pill(self, parent, text: str, _day_id: int, selected: bool):
         """Create a rounded square toggle button for a day of the week with glow effect."""
         var = ctk.BooleanVar(value=selected)
         btn = ctk.CTkButton(
@@ -578,7 +604,7 @@ class ProjectFormPanel(ctk.CTkFrame):
         sched_enabled = self.sched_enabled_var.get()
         sched_start = self.sched_start_entry.get().strip() or None
         sched_stop = self.sched_stop_entry.get().strip() or None
-        
+
         selected_days = [str(i) for i, var in self.day_vars.items() if var.get()]
         sched_days = ",".join(selected_days) if selected_days else None
 
@@ -620,7 +646,7 @@ class ProjectFormPanel(ctk.CTkFrame):
         sched_enabled = self.sched_enabled_var.get()
         sched_start = self.sched_start_entry.get().strip() or None
         sched_stop = self.sched_stop_entry.get().strip() or None
-        
+
         selected_days = [str(i) for i, var in self.day_vars.items() if var.get()]
         sched_days = ",".join(selected_days) if selected_days else None
 
@@ -650,3 +676,166 @@ class ProjectFormPanel(ctk.CTkFrame):
                 self._on_back()
         except Exception as e:  # pylint: disable=broad-exception-caught
             messagebox.showerror("Error", f"Failed to update project: {e}")
+
+    # ------------------------------------------------------------------
+    # Dependencies
+    # ------------------------------------------------------------------
+
+    def _on_install_requirements(self):
+        """Run `pip install -r requirements.txt` using the project's interpreter."""
+        if not self._is_edit or not self._project:
+            return
+
+        python = self.python_entry.get().strip()
+        folder = self._project.folder_path
+        req_file = Path(folder) / "requirements.txt"
+
+        if not Path(python).exists():
+            messagebox.showerror("Error", f"Python interpreter not found:\n{python}")
+            return
+        if not req_file.exists():
+            messagebox.showerror(
+                "requirements.txt not found",
+                f"No requirements.txt in:\n{folder}",
+            )
+            return
+
+        PipInstallDialog(
+            self.winfo_toplevel(),
+            python_path=python,
+            requirements_path=str(req_file),
+            cwd=folder,
+        )
+
+
+class PipInstallDialog(ctk.CTkToplevel):
+    """Modal dialog that streams `pip install -r requirements.txt` output live."""
+
+    def __init__(self, master, python_path: str, requirements_path: str, cwd: str):
+        super().__init__(master)
+        self.title("Installing requirements")
+        self.geometry("720x460")
+        self.configure(fg_color=_COLORS["base"])
+        self.transient(master)
+        self.grab_set()
+
+        self._proc: Optional[subprocess.Popen] = None
+        self._done = False
+
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+        header = ctk.CTkLabel(
+            self,
+            text="pip install -r requirements.txt",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color=_COLORS["text"],
+        )
+        header.grid(row=0, column=0, padx=16, pady=(16, 8), sticky="w")
+
+        self._textbox = ctk.CTkTextbox(
+            self,
+            fg_color=_COLORS["mantle"],
+            text_color=_COLORS["text"],
+            font=ctk.CTkFont(family="Consolas", size=11),
+            wrap="word",
+        )
+        self._textbox.grid(row=1, column=0, padx=16, pady=0, sticky="nsew")
+        self._textbox.configure(state="disabled")
+
+        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        btn_frame.grid(row=2, column=0, padx=16, pady=12, sticky="e")
+
+        self._cancel_btn = ctk.CTkButton(
+            btn_frame, text="Cancel", width=100, height=32,
+            fg_color=_COLORS["surface"], hover_color=_COLORS["overlay"],
+            text_color=_COLORS["text"],
+            command=self._on_cancel,
+        )
+        self._cancel_btn.pack(side="left", padx=(0, 8))
+
+        self._close_btn = ctk.CTkButton(
+            btn_frame, text="Close", width=100, height=32,
+            fg_color=_COLORS["blue"], hover_color="#74a8e8",
+            text_color="#1e1e2e",
+            command=self.destroy,
+            state="disabled",
+        )
+        self._close_btn.pack(side="left")
+
+        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
+
+        threading.Thread(
+            target=self._run_pip,
+            args=(python_path, requirements_path, cwd),
+            daemon=True,
+        ).start()
+
+    def _append(self, line: str):
+        try:
+            self._textbox.configure(state="normal")
+            self._textbox.insert("end", line)
+            self._textbox.see("end")
+            self._textbox.configure(state="disabled")
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
+
+    def _run_pip(self, python_path: str, requirements_path: str, cwd: str):
+        env = os.environ.copy()
+        env["PYTHONIOENCODING"] = "utf-8"
+        env["PYTHONUTF8"] = "1"
+        env["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
+
+        try:
+            # pylint: disable=consider-using-with
+            self._proc = subprocess.Popen(
+                [python_path, "-m", "pip", "install", "-r", requirements_path],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                cwd=cwd,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                bufsize=1,
+                env=env,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            self.after(0, self._append, f"[ERROR] Failed to launch pip: {e}\n")
+            self.after(0, self._finish, -1)
+            return
+
+        for line in iter(self._proc.stdout.readline, ""):
+            if not line:
+                break
+            self.after(0, self._append, line)
+
+        try:
+            self._proc.stdout.close()
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
+        exit_code = self._proc.wait()
+        self.after(0, self._finish, exit_code)
+
+    def _finish(self, exit_code: int):
+        self._done = True
+        if exit_code == 0:
+            self._append("\n✓ Done.\n")
+        else:
+            self._append(f"\n✗ pip exited with code {exit_code}.\n")
+        self._cancel_btn.configure(state="disabled")
+        self._close_btn.configure(state="normal")
+
+    def _on_cancel(self):
+        if self._done:
+            self.destroy()
+            return
+        if self._proc and self._proc.poll() is None:
+            try:
+                self._proc.terminate()
+            except Exception:  # pylint: disable=broad-exception-caught
+                pass
+        self._append("\n[Cancelled]\n")
+        self._cancel_btn.configure(state="disabled")
+        self._close_btn.configure(state="normal")
+        self._done = True

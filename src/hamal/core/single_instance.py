@@ -9,16 +9,16 @@ How it works:
 """
 
 import ctypes
-import socket
-import threading
 import logging
+import socket
 import sys
+import threading
 
 logger = logging.getLogger(__name__)
 
 # Unique identifiers for this application
 _IS_FROZEN = getattr(sys, "frozen", False)
-# Using 'Local\' instead of 'Global\' to avoid permission issues; 
+# Using 'Local\' instead of 'Global\' to avoid permission issues;
 # also added a suffix to ensure it's session-scoped.
 _MUTEX_NAME = "Local\\HAMAL_SingleInstance_Mutex" if _IS_FROZEN else "Local\\HAMAL_SingleInstance_Mutex_Dev"
 _IPC_PORT = 19847 if _IS_FROZEN else 19848

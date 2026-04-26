@@ -6,9 +6,9 @@ from typing import Optional
 
 import customtkinter as ctk
 
-from hamal.database.models import Project
 from hamal.database.crud import create_project, update_project
-from hamal.utils.helpers import detect_python_interpreter, detect_entry_file, get_python_files
+from hamal.database.models import Project
+from hamal.utils.helpers import detect_entry_file, detect_python_interpreter, get_python_files
 
 
 class AddProjectDialog(ctk.CTkToplevel):

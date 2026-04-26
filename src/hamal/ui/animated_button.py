@@ -5,6 +5,7 @@ from typing import Callable, Optional
 import customtkinter as ctk
 from PIL import Image, ImageDraw, ImageFont
 
+
 class DepthButton(ctk.CTkLabel):
     """
     Button that renders itself fully as an image using PIL.
@@ -231,7 +232,7 @@ def create_depth_button(
     text: str,
     base_color: str,
     hover_color: str,
-    shadow_color: str = None,
+    shadow_color: Optional[str] = None,
     image: Optional[ctk.CTkImage] = None,
     command: Optional[Callable] = None,
     width: int = 110,

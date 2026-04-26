@@ -41,3 +41,8 @@ src/hamal/ui/assets/icons/generate_ico.py
 
 # Recovery files
 HAMAL_Recovery/
+
+# Documentation (as per user rules)
+*.md
+!README.md
+.claude/
