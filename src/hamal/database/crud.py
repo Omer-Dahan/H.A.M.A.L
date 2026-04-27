@@ -30,6 +30,7 @@ def create_project(
     entrypoint: str,
     interpreter_path: str,
     auto_start: bool = False,
+    auto_restart: bool = False,
     schedule_enabled: bool = False,
     schedule_start: Optional[str] = None,
     schedule_stop: Optional[str] = None,
@@ -44,6 +45,7 @@ def create_project(
             entrypoint=entrypoint,
             interpreter_path=interpreter_path,
             auto_start=auto_start,
+            auto_restart=auto_restart,
             schedule_enabled=schedule_enabled,
             schedule_start=schedule_start,
             schedule_stop=schedule_stop,
@@ -64,6 +66,7 @@ def update_project(
     entrypoint: Optional[str] = None,
     interpreter_path: Optional[str] = None,
     auto_start: Optional[bool] = None,
+    auto_restart: Optional[bool] = None,
     schedule_enabled: Optional[bool] = None,
     schedule_start: Optional[str] = None,
     schedule_stop: Optional[str] = None,
@@ -86,6 +89,8 @@ def update_project(
             project.interpreter_path = interpreter_path
         if auto_start is not None:
             project.auto_start = auto_start
+        if auto_restart is not None:
+            project.auto_restart = auto_restart
         if schedule_enabled is not None:
             project.schedule_enabled = schedule_enabled
         if schedule_start is not None:

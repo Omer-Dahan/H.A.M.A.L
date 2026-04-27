@@ -169,14 +169,32 @@ class ProjectFormPanel(ctk.CTkFrame):
             button_hover_color=_COLORS["blue"],
         ).grid(row=0, column=2, padx=(10, 16), pady=14)
 
+        restart_row = self._option_row(
+            scroll,
+            label="Auto-restart on crash",
+            description="If the process exits with an error, restart it automatically after 5 seconds.",
+            row=5,
+        )
+        self.auto_restart_var = ctk.BooleanVar(value=self._project.auto_restart if self._is_edit else False)
+        ctk.CTkSwitch(
+            restart_row,
+            text="",
+            variable=self.auto_restart_var,
+            onvalue=True, offvalue=False,
+            width=50,
+            progress_color=_COLORS["red"],
+            button_color=_COLORS["text"],
+            button_hover_color=_COLORS["red"],
+        ).grid(row=0, column=2, padx=(10, 16), pady=14)
+
         # ── Scheduling section ─────────────────────────────────────────
-        self._section_label(scroll, "Scheduling", row=5)
+        self._section_label(scroll, "Scheduling", row=6)
 
         sched_row = self._option_row(
             scroll,
             label="Scheduled Operation",
             description="Automatically start and stop the script at specific times.",
-            row=6,
+            row=7,
         )
 
         # Add time inputs to a NEW row (row 2) to allow text to be full width
@@ -230,13 +248,13 @@ class ProjectFormPanel(ctk.CTkFrame):
 
         # ── Dependencies section (Edit mode only — needs a saved folder) ──
         if self._is_edit:
-            self._section_label(scroll, "Dependencies", row=7)
+            self._section_label(scroll, "Dependencies", row=8)
 
             req_row = self._option_row(
                 scroll,
                 label="Install requirements.txt",
                 description="Runs `pip install -r requirements.txt` using this project's Python interpreter.",
-                row=8,
+                row=9,
             )
             self._req_btn = ctk.CTkButton(
                 req_row,
@@ -253,7 +271,7 @@ class ProjectFormPanel(ctk.CTkFrame):
 
         # ── Action buttons ─────────────────────────────────────────────
         btn_frame = ctk.CTkFrame(scroll, fg_color="transparent")
-        btn_frame.grid(row=9, column=0, padx=16, pady=(16, 24), sticky="e")
+        btn_frame.grid(row=10, column=0, padx=16, pady=(16, 24), sticky="e")
 
         ctk.CTkButton(
             btn_frame,
@@ -601,6 +619,7 @@ class ProjectFormPanel(ctk.CTkFrame):
         entry = self.entry_entry.get().strip()
         python = self.python_entry.get().strip()
         auto_start = self.auto_start_var.get()
+        auto_restart = self.auto_restart_var.get()
         sched_enabled = self.sched_enabled_var.get()
         sched_start = self.sched_start_entry.get().strip() or None
         sched_stop = self.sched_stop_entry.get().strip() or None
@@ -626,6 +645,7 @@ class ProjectFormPanel(ctk.CTkFrame):
                 name=name, folder_path=folder,
                 entrypoint=entry, interpreter_path=python,
                 auto_start=auto_start,
+                auto_restart=auto_restart,
                 schedule_enabled=sched_enabled,
                 schedule_start=sched_start,
                 schedule_stop=sched_stop,
@@ -643,6 +663,7 @@ class ProjectFormPanel(ctk.CTkFrame):
         entry = self.entry_var.get()
         python = self.python_entry.get().strip()
         auto_start = self.auto_start_var.get()
+        auto_restart = self.auto_restart_var.get()
         sched_enabled = self.sched_enabled_var.get()
         sched_start = self.sched_start_entry.get().strip() or None
         sched_stop = self.sched_stop_entry.get().strip() or None
@@ -665,6 +686,7 @@ class ProjectFormPanel(ctk.CTkFrame):
                 project_id=self._project.id,
                 name=name, entrypoint=entry, interpreter_path=python,
                 auto_start=auto_start,
+                auto_restart=auto_restart,
                 schedule_enabled=sched_enabled,
                 schedule_start=sched_start,
                 schedule_stop=sched_stop,

@@ -4,11 +4,15 @@ import logging
 import os
 import subprocess
 import threading
+import psutil
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Callable, Optional
+
+
 
 from hamal.core.log_handler import LogHandler
 from hamal.database.models import Project
@@ -110,6 +114,52 @@ class ProcessManager:
 
             return (datetime.now() - info.start_time).total_seconds()
 
+    @staticmethod
+    def _kill_conflicting_processes(script_path: Path, own_pid: int) -> list[int]:
+        """Find and kill any external Python processes running the same script.
+
+        This handles the case where the bot is already running outside of HAMAL
+        (e.g., started manually in a terminal) and holds a lock on SQLite session files.
+        We scan all running Python processes, match them by script path, and kill them.
+
+        Args:
+            script_path: Absolute path to the entrypoint script.
+            own_pid: PID of the HAMAL process itself (never killed).
+
+        Returns:
+            List of PIDs that were killed.
+        """
+        logger = logging.getLogger(__name__)
+        target = os.path.normcase(str(script_path.resolve()))
+        killed = []
+
+        for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+            try:
+                if proc.pid == own_pid:
+                    continue
+                name = (proc.info["name"] or "").lower()
+                if "python" not in name:
+                    continue
+                cmdline = proc.info["cmdline"] or []
+                for arg in cmdline:
+                    try:
+                        if os.path.normcase(str(Path(arg).resolve())) == target:
+                            logger.info(
+                                f"  [CLEANUP] Killing conflicting process PID={proc.pid} "
+                                f"running {script_path.name}"
+                            )
+                            proc.kill()
+                            proc.wait(timeout=3)
+                            killed.append(proc.pid)
+                            break
+                    except (ValueError, OSError):
+                        # Path resolution can fail on non-path strings — skip
+                        continue
+            except (psutil.NoSuchProcess, psutil.AccessDenied, Exception):  # pylint: disable=broad-exception-caught
+                pass
+
+        return killed
+
     def start_project(self, project: Project) -> bool:
         """Start a project subprocess."""
         # pylint: disable=logging-fstring-interpolation
@@ -161,6 +211,17 @@ class ProcessManager:
 
             log_handler = LogHandler(project.id)
             log_handler.start_logging()
+
+            # Kill any external processes running the same script before starting.
+            # This resolves SQLite "database is locked" errors caused by a previous
+            # instance of the bot running outside HAMAL.
+            killed_pids = self._kill_conflicting_processes(script, own_pid=os.getpid())
+            if killed_pids:
+                self._emit_log(
+                    project.id,
+                    f"[HAMAL] ⚡ Killed {len(killed_pids)} conflicting process(es): "
+                    f"{killed_pids} — freeing resource locks before start."
+                )
 
             env = os.environ.copy()
             env["PYTHONIOENCODING"] = "utf-8"

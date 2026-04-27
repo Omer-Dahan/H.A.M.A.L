@@ -108,6 +108,8 @@ class MainWindow(ctk.CTk):
 
         # Initialize auto-run and scheduling
         self._auto_start_timers = {} # project_id -> remaining_seconds
+        self._pending_restart_ids: set[int] = set()  # projects waiting for auto-restart
+        self._crash_timestamps: dict[int, list] = {}  # project_id -> list of crash epoch times
         self._init_auto_start()
         self._init_scheduling()
 
@@ -119,6 +121,7 @@ class MainWindow(ctk.CTk):
         self.process_manager.on_status_changed = self._on_status_changed
         self.process_manager.on_log_received = self._on_log_received
         self.process_manager.on_crash_detected = self._on_crash_detected
+        self.process_manager.on_process_exited = self._on_process_exited
 
     def _setup_menu(self):
         """Setup a custom dark-themed menu bar using CTkFrame."""
@@ -529,17 +532,96 @@ class MainWindow(ctk.CTk):
         self.after(0, lambda: self.log_panel.add_log(project_id, line))
 
     def _on_crash_detected(self, project_id: int, name: str, exit_code: int, logs: str):  # pylint: disable=unused-argument
-        """Handle process crash."""
+        """Handle process crash. Schedules auto-restart if enabled, otherwise shows a warning popup."""
         def show_crash():
             self.log_panel.set_project(project_id, name)
             self.log_panel.add_log(project_id, f"\n{'='*50}")
             self.log_panel.add_log(project_id, f"⚠️ CRASHED with exit code {exit_code}")
             self.log_panel.add_log(project_id, f"{'='*50}\n")
-            messagebox.showwarning(
-                "Process Crashed",
-                f"'{name}' crashed with exit code {exit_code}"
-            )
+
+            # Try to schedule auto-restart; if it returns False, show the popup instead
+            if not self._schedule_auto_restart(project_id, name):
+                messagebox.showwarning(
+                    "Process Crashed",
+                    f"'{name}' crashed with exit code {exit_code}"
+                )
         self.after(0, show_crash)
+
+    def _on_process_exited(self, project_id: int, _exit_code: int):
+        """Cancel any pending restart when a process exits cleanly (user-stopped)."""
+        # If the user stopped the project manually, cancel any scheduled restart.
+        self._cancel_pending_restart(project_id)
+
+    def _schedule_auto_restart(self, project_id: int, name: str) -> bool:
+        """Schedule an auto-restart for a crashed project if the feature is enabled.
+
+        Returns True if a restart was scheduled, False otherwise.
+
+        Guards:
+        - Reads fresh project data from DB (handles deletion between crash and restart).
+        - Limits to 3 crashes within 60 seconds to prevent infinite crash loops.
+        - Skips if the user has already manually stopped the project (not in pending set).
+        """
+        import time  # pylint: disable=import-outside-toplevel
+        project = get_project_by_id(project_id)
+        if not project or not project.auto_restart:
+            return False
+
+        # --- Crash loop protection ---
+        now = time.monotonic()
+        history = self._crash_timestamps.setdefault(project_id, [])
+        # Prune entries older than 60 seconds
+        history[:] = [t for t in history if now - t < 60]
+        history.append(now)
+
+        MAX_ATTEMPTS = 3
+        if len(history) > MAX_ATTEMPTS:
+            self.log_panel.add_log(
+                project_id,
+                f"[HAMAL] 🚫 Auto-restart disabled for '{name}': "
+                f"crashed {len(history)} times in 60 seconds. Fix the issue and restart manually."
+            )
+            messagebox.showwarning(
+                "Auto-restart Disabled",
+                f"'{name}' crashed {len(history)} times in under 60 seconds.\n"
+                "Auto-restart has been suspended. Please fix the issue and start manually."
+            )
+            self._crash_timestamps.pop(project_id, None)
+            return False
+
+        # --- Schedule restart ---
+        self._pending_restart_ids.add(project_id)
+        delay_seconds = 5
+        self.log_panel.add_log(
+            project_id,
+            f"[HAMAL] 🔄 Auto-restarting '{name}' in {delay_seconds} seconds "
+            f"(attempt {len(history)}/{MAX_ATTEMPTS})..."
+        )
+
+        def do_restart():
+            # Guard: was the restart cancelled (e.g. user stopped manually)?
+            if project_id not in self._pending_restart_ids:
+                return
+            self._pending_restart_ids.discard(project_id)
+
+            # Guard: re-fetch project in case it was deleted or settings changed
+            fresh_project = get_project_by_id(project_id)
+            if not fresh_project or not fresh_project.auto_restart:
+                return
+
+            # Guard: widget may have been destroyed if the app closed
+            try:
+                self.log_panel.add_log(project_id, f"[HAMAL] 🚀 Restarting '{name}'...")
+                self.process_manager.start_project(fresh_project)
+            except Exception:  # pylint: disable=broad-exception-caught
+                pass
+
+        self.after(delay_seconds * 1000, do_restart)
+        return True
+
+    def _cancel_pending_restart(self, project_id: int):
+        """Cancel a scheduled auto-restart (called when user stops the project)."""
+        self._pending_restart_ids.discard(project_id)
 
     def _show_logs(self, project_id: int, project_name: str):
         """Show logs for a project (switches back to log panel if needed)."""
