@@ -117,7 +117,7 @@ class SettingsPanel(ctk.CTkFrame):
             text_color=_COLORS["blue"],
             font=ctk.CTkFont(size=14, weight="bold"),
             corner_radius=12,
-            command=self._go_back,
+            command=self._cancel,
         ).grid(row=0, column=0, sticky="w", padx=(5, 4))
 
         ctk.CTkLabel(
@@ -212,6 +212,33 @@ class SettingsPanel(ctk.CTkFrame):
             command=self._open_filters,
         ).grid(row=0, column=2, padx=(8, 16), pady=14)
 
+        # ── Action buttons ─────────────────────────────────────────────
+        btn_frame = ctk.CTkFrame(content, fg_color="transparent")
+        btn_frame.grid(row=7, column=0, padx=16, pady=(16, 24), sticky="e")
+
+        ctk.CTkButton(
+            btn_frame,
+            text="Cancel",
+            width=100, height=36,
+            fg_color=_COLORS["surface"],
+            hover_color=_COLORS["overlay"],
+            text_color=_COLORS["text"],
+            corner_radius=8,
+            command=self._cancel,
+        ).pack(side="left", padx=(0, 8))
+
+        ctk.CTkButton(
+            btn_frame,
+            text="Save Settings",
+            width=130, height=36,
+            fg_color=_COLORS["blue"],
+            hover_color="#74a8e8",
+            text_color="#1e1e2e",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            corner_radius=8,
+            command=self._on_save,
+        ).pack(side="left")
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
@@ -272,7 +299,18 @@ class SettingsPanel(ctk.CTkFrame):
         if self._on_log_filters:
             self._on_log_filters()
 
+    def _cancel(self):
+        """Return to the log panel without saving."""
+        # Refresh UI variables to previous state so if panel is opened again it matches saved state
+        self.refresh()
+        if self._on_back:
+            self._on_back()
+
     def _go_back(self):
+        """Deprecated alias for _cancel for compatibility."""
+        self._cancel()
+
+    def _on_save(self):
         """Save settings and return to the log panel."""
         self._settings["minimize_to_tray"] = self._tray_var.get()
 

@@ -1,6 +1,7 @@
 
 """Dashboard widget with project table using CustomTkinter."""
 
+from hamal.core.i18n import t
 from tkinter import messagebox
 from typing import Callable, Optional
 
@@ -72,7 +73,7 @@ class Dashboard(ctk.CTkFrame):
         # Title
         self.title = ctk.CTkLabel(
             self.header,
-            text="Projects",
+            text=t("Projects"),
             font=ctk.CTkFont(size=22, weight="bold"),
             text_color=COLORS["text"]
         )
@@ -87,7 +88,7 @@ class Dashboard(ctk.CTkFrame):
         # Start All button (green - left, matching logo)
         self.start_all_btn = create_depth_button(
             self.buttons_frame,
-            text="Start All",
+            text=t("Start All"),
             base_color=COLORS["green"],
             hover_color="#b8efb3",  # Lighter green for hover
             image=Icons.get("play"),
@@ -100,7 +101,7 @@ class Dashboard(ctk.CTkFrame):
         # Add Project button (blue - middle, matching logo)
         self.add_btn = create_depth_button(
             self.buttons_frame,
-            text="Add Project",
+            text=t("Add Project"),
             base_color=COLORS["blue"],
             hover_color="#9bc4ff",  # Lighter blue for hover
             image=Icons.get("plus"),
@@ -113,7 +114,7 @@ class Dashboard(ctk.CTkFrame):
         # Stop All button (red - right, matching logo)
         self.stop_all_btn = create_depth_button(
             self.buttons_frame,
-            text="Stop All",
+            text=t("Stop All"),
             base_color=COLORS["red"],
             hover_color="#ff9fb8",  # Lighter red for hover
             image=Icons.get("stop"),
@@ -166,7 +167,7 @@ class Dashboard(ctk.CTkFrame):
         # Empty state
         self.empty_label = ctk.CTkLabel(
             self.table_body,
-            text="No projects yet.\nClick '+ Add Project' to get started!",
+            text=t("No projects yet.\nClick ")+ Add Project' to get started!",
             font=ctk.CTkFont(size=14),
             text_color=COLORS["subtext"]
         )
@@ -240,7 +241,7 @@ class Dashboard(ctk.CTkFrame):
 
         status_dot = ctk.CTkLabel(
             status_frame,
-            text="●",
+            text=t("●"),
             font=ctk.CTkFont(size=10),
             width=15,
             cursor="hand2"
@@ -249,7 +250,7 @@ class Dashboard(ctk.CTkFrame):
 
         status_text = ctk.CTkLabel(
             status_frame,
-            text="Stopped",
+            text=t("Stopped"),
             font=ctk.CTkFont(size=12),
             text_color=COLORS["subtext"],
             cursor="hand2"
@@ -286,7 +287,6 @@ class Dashboard(ctk.CTkFrame):
         )
         play_btn.pack(side="left", padx=2)
 
-        # Stop button
         stop_btn = ctk.CTkButton(
             actions_frame,
             text="",
@@ -300,6 +300,22 @@ class Dashboard(ctk.CTkFrame):
             command=lambda pid=project.id: self._on_stop_project(pid)
         )
         stop_btn.pack(side="left", padx=2)
+
+        restart_btn = None
+        if getattr(project, "dev_mode", False):
+            restart_btn = ctk.CTkButton(
+                actions_frame,
+                text=t("↻"),
+                font=ctk.CTkFont(size=18, weight="bold"),
+                width=32,
+                height=32,
+                corner_radius=4,
+                fg_color=COLORS["yellow"],
+                hover_color="#f2dca5",
+                text_color="#1e1e2e",
+                command=lambda pid=project.id: self._on_restart_project(pid)
+            )
+            restart_btn.pack(side="left", padx=2)
 
         # Settings/Edit button
         edit_btn = ctk.CTkButton(
@@ -337,6 +353,8 @@ class Dashboard(ctk.CTkFrame):
             uptime_label, actions_frame, play_btn, stop_btn,
             edit_btn, delete_btn
         ]
+        if restart_btn:
+            all_widgets.append(restart_btn)
 
         # Use a localized job variable for this row
         row_frame.leave_job = None
@@ -368,7 +386,7 @@ class Dashboard(ctk.CTkFrame):
             widget.bind("<Enter>", on_enter)
             widget.bind("<Leave>", on_leave)
             # Bind click only to non-button widgets (first 6 in the list)
-            if widget not in (play_btn, stop_btn, edit_btn, delete_btn, actions_frame):
+            if widget not in (play_btn, stop_btn, restart_btn, edit_btn, delete_btn, actions_frame):
                 widget.bind("<Button-1>", on_click_visual)
 
         # Store widgets for updates
@@ -430,6 +448,19 @@ class Dashboard(ctk.CTkFrame):
     def _on_stop_project(self, project_id: int):
         """Stop a project."""
         self.process_manager.stop_project(project_id)
+
+    def _on_restart_project(self, project_id: int):
+        """Restart a project and clear its logs."""
+        self.process_manager.stop_project(project_id)
+        
+        # Clear UI logs if the log panel is available
+        if hasattr(self.master, "log_panel"):
+            self.master.log_panel.clear_project_logs(project_id)
+            
+        project = get_project_by_id(project_id)
+        if project:
+            # We delay the start slightly to allow the stop process and UI to update
+            self.after(500, lambda: self.process_manager.start_project(project))
 
     def _on_edit_project(self, project_id: int):
         """Edit a project (in-app)."""

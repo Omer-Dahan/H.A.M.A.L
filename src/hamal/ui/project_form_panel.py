@@ -1,5 +1,6 @@
 """In-app project form panel – replaces the log panel when adding or editing a project."""
 
+from hamal.core.i18n import t
 import os
 import subprocess
 import threading
@@ -24,6 +25,7 @@ _COLORS = {
     "blue":    "#89b4fa",
     "green":   "#a6e3a1",
     "red":     "#f38ba8",
+    "yellow":  "#f9e2af",
 }
 
 
@@ -96,7 +98,7 @@ class ProjectFormPanel(ctk.CTkFrame):
 
         ctk.CTkButton(
             header,
-            text="← Back",
+            text=t("← Back"),
             width=100, height=35, # Reduced slightly to match depth buttons
             fg_color=_COLORS["surface"],
             hover_color=_COLORS["overlay"],
@@ -106,7 +108,7 @@ class ProjectFormPanel(ctk.CTkFrame):
             command=self._cancel,
         ).grid(row=0, column=0, sticky="w", padx=(5, 4))
 
-        title_text = "Project Settings" if self._is_edit else "Add New Project"
+        title_text=t("Project Settings") if self._is_edit else "Add New Project"
         ctk.CTkLabel(
             header,
             text=title_text,
@@ -117,7 +119,7 @@ class ProjectFormPanel(ctk.CTkFrame):
 
         ctk.CTkLabel(
             header,
-            text="Esc to cancel",
+            text=t("Esc to cancel"),
             font=ctk.CTkFont(size=11),
             text_color=_COLORS["subtext"],
             anchor="e",
@@ -153,8 +155,8 @@ class ProjectFormPanel(ctk.CTkFrame):
 
         auto_row = self._option_row(
             scroll,
-            label="Auto-start this project",
-            description="Start automatically after 10 seconds when the app runs.",
+            label=t("Auto-start this project"),
+            description=t("Start automatically after 10 seconds when the app runs."),
             row=4,
         )
         self.auto_start_var = ctk.BooleanVar(value=self._project.auto_start if self._is_edit else False)
@@ -167,12 +169,12 @@ class ProjectFormPanel(ctk.CTkFrame):
             progress_color=_COLORS["blue"],
             button_color=_COLORS["text"],
             button_hover_color=_COLORS["blue"],
-        ).grid(row=0, column=2, padx=(10, 16), pady=14)
+        ).grid(row=0, column=2, rowspan=2, padx=(10, 16), pady=14)
 
         restart_row = self._option_row(
             scroll,
-            label="Auto-restart on crash",
-            description="If the process exits with an error, restart it automatically after 5 seconds.",
+            label=t("Auto-restart on crash"),
+            description=t("If the process exits with an error, restart it automatically after 5 seconds."),
             row=5,
         )
         self.auto_restart_var = ctk.BooleanVar(value=self._project.auto_restart if self._is_edit else False)
@@ -185,16 +187,34 @@ class ProjectFormPanel(ctk.CTkFrame):
             progress_color=_COLORS["red"],
             button_color=_COLORS["text"],
             button_hover_color=_COLORS["red"],
-        ).grid(row=0, column=2, padx=(10, 16), pady=14)
+        ).grid(row=0, column=2, rowspan=2, padx=(10, 16), pady=14)
+
+        dev_mode_row = self._option_row(
+            scroll,
+            label=t("Dev Mode"),
+            description=t("Adds a restart button that clears logs."),
+            row=6,
+        )
+        self.dev_mode_var = ctk.BooleanVar(value=self._project.dev_mode if getattr(self, '_is_edit', False) and hasattr(self._project, 'dev_mode') else False)
+        ctk.CTkSwitch(
+            dev_mode_row,
+            text="",
+            variable=self.dev_mode_var,
+            onvalue=True, offvalue=False,
+            width=50,
+            progress_color=_COLORS["yellow"],
+            button_color=_COLORS["text"],
+            button_hover_color=_COLORS["yellow"],
+        ).grid(row=0, column=2, rowspan=2, padx=(10, 16), pady=14)
 
         # ── Scheduling section ─────────────────────────────────────────
-        self._section_label(scroll, "Scheduling", row=6)
+        self._section_label(scroll, "Scheduling", row=7)
 
         sched_row = self._option_row(
             scroll,
-            label="Scheduled Operation",
-            description="Automatically start and stop the script at specific times.",
-            row=7,
+            label=t("Scheduled Operation"),
+            description=t("Automatically start and stop the script at specific times."),
+            row=8,
         )
 
         # Add time inputs to a NEW row (row 2) to allow text to be full width
@@ -202,9 +222,9 @@ class ProjectFormPanel(ctk.CTkFrame):
         time_frame.grid(row=2, column=1, columnspan=3, padx=16, pady=(0, 4), sticky="w")
 
         # Start Time
-        ctk.CTkLabel(time_frame, text="Start:", font=ctk.CTkFont(size=11), text_color=_COLORS["subtext"]).grid(row=0, column=0, padx=4)
+        ctk.CTkLabel(time_frame, text=t("Start:"), font=ctk.CTkFont(size=11), text_color=_COLORS["subtext"]).grid(row=0, column=0, padx=4)
         self.sched_start_entry = ctk.CTkEntry(
-            time_frame, width=60, height=28, placeholder_text="09:00",
+            time_frame, width=60, height=28, placeholder_text=t("09:00"),
             fg_color=_COLORS["mantle"], border_color=_COLORS["overlay"],
             text_color=_COLORS["text"]
         )
@@ -213,9 +233,9 @@ class ProjectFormPanel(ctk.CTkFrame):
             self.sched_start_entry.insert(0, self._project.schedule_start)
 
         # Stop Time
-        ctk.CTkLabel(time_frame, text="Stop:", font=ctk.CTkFont(size=11), text_color=_COLORS["subtext"]).grid(row=0, column=2, padx=(8, 4))
+        ctk.CTkLabel(time_frame, text=t("Stop:"), font=ctk.CTkFont(size=11), text_color=_COLORS["subtext"]).grid(row=0, column=2, padx=(8, 4))
         self.sched_stop_entry = ctk.CTkEntry(
-            time_frame, width=60, height=28, placeholder_text="18:00",
+            time_frame, width=60, height=28, placeholder_text=t("18:00"),
             fg_color=_COLORS["mantle"], border_color=_COLORS["overlay"],
             text_color=_COLORS["text"]
         )
@@ -235,7 +255,7 @@ class ProjectFormPanel(ctk.CTkFrame):
             button_color=_COLORS["text"],
             button_hover_color=_COLORS["blue"],
             command=self._toggle_scheduling_ui
-        ).grid(row=0, column=3, padx=(0, 16), pady=(10, 0), sticky="ne")
+        ).grid(row=0, column=3, rowspan=2, padx=(0, 16), pady=(10, 0), sticky="ne")
 
         # ── Recurrence Days (Hidden by default, shown if enabled) ──────
         self.days_outer_frame = ctk.CTkFrame(sched_row, fg_color="transparent")
@@ -248,17 +268,17 @@ class ProjectFormPanel(ctk.CTkFrame):
 
         # ── Dependencies section (Edit mode only — needs a saved folder) ──
         if self._is_edit:
-            self._section_label(scroll, "Dependencies", row=8)
+            self._section_label(scroll, "Dependencies", row=9)
 
             req_row = self._option_row(
                 scroll,
-                label="Install requirements.txt",
+                label=t("Install requirements.txt"),
                 description="Runs `pip install -r requirements.txt` using this project's Python interpreter.",
-                row=9,
+                row=10,
             )
             self._req_btn = ctk.CTkButton(
                 req_row,
-                text="Install",
+                text=t("Install"),
                 width=100, height=32,
                 fg_color=_COLORS["blue"],
                 hover_color="#74a8e8",
@@ -271,11 +291,11 @@ class ProjectFormPanel(ctk.CTkFrame):
 
         # ── Action buttons ─────────────────────────────────────────────
         btn_frame = ctk.CTkFrame(scroll, fg_color="transparent")
-        btn_frame.grid(row=10, column=0, padx=16, pady=(16, 24), sticky="e")
+        btn_frame.grid(row=11, column=0, padx=16, pady=(16, 24), sticky="e")
 
         ctk.CTkButton(
             btn_frame,
-            text="Cancel",
+            text=t("Cancel"),
             width=100, height=36,
             fg_color=_COLORS["surface"],
             hover_color=_COLORS["overlay"],
@@ -284,7 +304,7 @@ class ProjectFormPanel(ctk.CTkFrame):
             command=self._cancel,
         ).pack(side="left", padx=(0, 8))
 
-        save_text = "Save Changes" if self._is_edit else "Add Project"
+        save_text=t("Save Changes") if self._is_edit else "Add Project"
         save_color = _COLORS["blue"] if self._is_edit else _COLORS["green"]
         ctk.CTkButton(
             btn_frame,
@@ -331,18 +351,18 @@ class ProjectFormPanel(ctk.CTkFrame):
         row_frame.grid_columnconfigure(2, weight=0)
         row_frame.grid_columnconfigure(3, weight=0)
 
-        # Title Label - Spans Title and Time areas to prevent cutoff
+        # Title Label - Spans only text area to avoid switch
         l_label = ctk.CTkLabel(
             row_frame, text=label,
             font=ctk.CTkFont(size=14, weight="bold"),
             text_color=_COLORS["text"],
             anchor="nw",
             justify="left",
-            wraplength=350 # Sufficient room for title
+            wraplength=320 # Sufficient room for title
         )
-        l_label.grid(row=0, column=1, columnspan=2, padx=(16, 8), pady=(10, 2), sticky="new")
+        l_label.grid(row=0, column=1, padx=(16, 8), pady=(10, 0), sticky="new")
 
-        # Description Label (if exists) - Full width
+        # Description Label (if exists)
         if description:
             d_label = ctk.CTkLabel(
                 row_frame, text=description,
@@ -350,9 +370,9 @@ class ProjectFormPanel(ctk.CTkFrame):
                 text_color=_COLORS["subtext"],
                 anchor="nw",
                 justify="left",
-                wraplength=480 # Full panel width wrap
+                wraplength=360 # Fits inside the flexible column
             )
-            d_label.grid(row=1, column=1, columnspan=3, padx=(16, 16), pady=(0, 6), sticky="new")
+            d_label.grid(row=1, column=1, padx=(16, 8), pady=(2, 10), sticky="new")
         else:
             row_frame.grid_rowconfigure(0, weight=1, pad=12)
 
@@ -361,7 +381,7 @@ class ProjectFormPanel(ctk.CTkFrame):
     def _setup_days_ui(self, parent):
         """Build the recurrence days selector UI."""
         ctk.CTkLabel(
-            parent, text="RECURRENCE DAYS",
+            parent, text=t("RECURRENCE DAYS"),
             font=ctk.CTkFont(size=9, weight="bold"),
             text_color=_COLORS["subtext"],
             anchor="w"
@@ -427,13 +447,13 @@ class ProjectFormPanel(ctk.CTkFrame):
         folder_frame.grid_columnconfigure(0, weight=1)
 
         self.folder_entry = ctk.CTkEntry(
-            folder_frame, placeholder_text="Select project folder…",
+            folder_frame, placeholder_text=t("Select project folder…"),
             fg_color=_COLORS["mantle"], border_color=_COLORS["overlay"],
             text_color=_COLORS["text"],
         )
         self.folder_entry.grid(row=0, column=0, sticky="ew")
         ctk.CTkButton(
-            folder_frame, text="Browse", width=80,
+            folder_frame, text=t("Browse"), width=80,
             fg_color=_COLORS["blue"], hover_color="#74a8e8", text_color="#1e1e2e",
             command=self._browse_folder,
         ).grid(row=0, column=1, padx=(6, 0))
@@ -441,7 +461,7 @@ class ProjectFormPanel(ctk.CTkFrame):
         # Name
         self._field_row(parent, "Project Name:", 1)
         self.name_entry = ctk.CTkEntry(
-            parent, placeholder_text="My Bot",
+            parent, placeholder_text=t("My Bot"),
             fg_color=_COLORS["mantle"], border_color=_COLORS["overlay"],
             text_color=_COLORS["text"],
         )
@@ -454,13 +474,13 @@ class ProjectFormPanel(ctk.CTkFrame):
         entry_frame.grid_columnconfigure(0, weight=1)
 
         self.entry_entry = ctk.CTkEntry(
-            entry_frame, placeholder_text="main.py",
+            entry_frame, placeholder_text=t("main.py"),
             fg_color=_COLORS["mantle"], border_color=_COLORS["overlay"],
             text_color=_COLORS["text"],
         )
         self.entry_entry.grid(row=0, column=0, sticky="ew")
         ctk.CTkButton(
-            entry_frame, text="Browse", width=80,
+            entry_frame, text=t("Browse"), width=80,
             fg_color=_COLORS["overlay"], hover_color=_COLORS["surface"],
             text_color=_COLORS["text"],
             command=self._browse_entry_file,
@@ -473,13 +493,13 @@ class ProjectFormPanel(ctk.CTkFrame):
         python_frame.grid_columnconfigure(0, weight=1)
 
         self.python_entry = ctk.CTkEntry(
-            python_frame, placeholder_text="Auto-detected…",
+            python_frame, placeholder_text=t("Auto-detected…"),
             fg_color=_COLORS["mantle"], border_color=_COLORS["overlay"],
             text_color=_COLORS["text"],
         )
         self.python_entry.grid(row=0, column=0, sticky="ew")
         ctk.CTkButton(
-            python_frame, text="Browse", width=80,
+            python_frame, text=t("Browse"), width=80,
             fg_color=_COLORS["overlay"], hover_color=_COLORS["surface"],
             text_color=_COLORS["text"],
             command=self._browse_python,
@@ -540,7 +560,7 @@ class ProjectFormPanel(ctk.CTkFrame):
         self.python_entry.insert(0, p.interpreter_path)
         self.python_entry.grid(row=0, column=0, sticky="ew")
         ctk.CTkButton(
-            python_frame, text="Browse", width=80,
+            python_frame, text=t("Browse"), width=80,
             fg_color=_COLORS["overlay"], hover_color=_COLORS["surface"],
             text_color=_COLORS["text"],
             command=self._browse_python,
@@ -553,7 +573,7 @@ class ProjectFormPanel(ctk.CTkFrame):
     # ------------------------------------------------------------------
 
     def _browse_folder(self):
-        folder = filedialog.askdirectory(title="Select Project Folder")
+        folder = filedialog.askdirectory(title=t("Select Project Folder"))
         if folder:
             self.folder_entry.delete(0, "end")
             self.folder_entry.insert(0, folder)
@@ -563,7 +583,7 @@ class ProjectFormPanel(ctk.CTkFrame):
         folder = self.folder_entry.get().strip()
         initial_dir = folder if folder and Path(folder).exists() else None
         file = filedialog.askopenfilename(
-            title="Select Entry Python File",
+            title=t("Select Entry Python File"),
             initialdir=initial_dir,
             filetypes=[("Python files", "*.py"), ("All files", "*.*")],
         )
@@ -573,7 +593,7 @@ class ProjectFormPanel(ctk.CTkFrame):
 
     def _browse_python(self):
         file = filedialog.askopenfilename(
-            title="Select Python Executable",
+            title=t("Select Python Executable"),
             filetypes=[("Python", "python.exe"), ("All files", "*.*")],
         )
         if file:
@@ -586,11 +606,11 @@ class ProjectFormPanel(ctk.CTkFrame):
             self.python_entry.delete(0, "end")
             self.python_entry.insert(0, python)
             if self._status_label:
-                self._status_label.configure(text="✓ Found virtual environment", text_color=_COLORS["green"])
+                self._status_label.configure(text=t("✓ Found virtual environment"), text_color=_COLORS["green"])
         else:
             if self._status_label:
                 self._status_label.configure(
-                    text="⚠ No venv found – select Python manually", text_color=_COLORS["red"]
+                    text=t("⚠ No venv found – select Python manually"), text_color=_COLORS["red"]
                 )
         entry = detect_entry_file(folder)
         if entry:
@@ -620,6 +640,7 @@ class ProjectFormPanel(ctk.CTkFrame):
         python = self.python_entry.get().strip()
         auto_start = self.auto_start_var.get()
         auto_restart = self.auto_restart_var.get()
+        dev_mode = self.dev_mode_var.get()
         sched_enabled = self.sched_enabled_var.get()
         sched_start = self.sched_start_entry.get().strip() or None
         sched_stop = self.sched_stop_entry.get().strip() or None
@@ -646,6 +667,7 @@ class ProjectFormPanel(ctk.CTkFrame):
                 entrypoint=entry, interpreter_path=python,
                 auto_start=auto_start,
                 auto_restart=auto_restart,
+                dev_mode=dev_mode,
                 schedule_enabled=sched_enabled,
                 schedule_start=sched_start,
                 schedule_stop=sched_stop,
@@ -664,6 +686,7 @@ class ProjectFormPanel(ctk.CTkFrame):
         python = self.python_entry.get().strip()
         auto_start = self.auto_start_var.get()
         auto_restart = self.auto_restart_var.get()
+        dev_mode = self.dev_mode_var.get()
         sched_enabled = self.sched_enabled_var.get()
         sched_start = self.sched_start_entry.get().strip() or None
         sched_stop = self.sched_stop_entry.get().strip() or None
@@ -687,6 +710,7 @@ class ProjectFormPanel(ctk.CTkFrame):
                 name=name, entrypoint=entry, interpreter_path=python,
                 auto_start=auto_start,
                 auto_restart=auto_restart,
+                dev_mode=dev_mode,
                 schedule_enabled=sched_enabled,
                 schedule_start=sched_start,
                 schedule_stop=sched_stop,
@@ -749,7 +773,7 @@ class PipInstallDialog(ctk.CTkToplevel):
 
         header = ctk.CTkLabel(
             self,
-            text="pip install -r requirements.txt",
+            text=t("pip install -r requirements.txt"),
             font=ctk.CTkFont(size=14, weight="bold"),
             text_color=_COLORS["text"],
         )
@@ -769,7 +793,7 @@ class PipInstallDialog(ctk.CTkToplevel):
         btn_frame.grid(row=2, column=0, padx=16, pady=12, sticky="e")
 
         self._cancel_btn = ctk.CTkButton(
-            btn_frame, text="Cancel", width=100, height=32,
+            btn_frame, text=t("Cancel"), width=100, height=32,
             fg_color=_COLORS["surface"], hover_color=_COLORS["overlay"],
             text_color=_COLORS["text"],
             command=self._on_cancel,
@@ -777,7 +801,7 @@ class PipInstallDialog(ctk.CTkToplevel):
         self._cancel_btn.pack(side="left", padx=(0, 8))
 
         self._close_btn = ctk.CTkButton(
-            btn_frame, text="Close", width=100, height=32,
+            btn_frame, text=t("Close"), width=100, height=32,
             fg_color=_COLORS["blue"], hover_color="#74a8e8",
             text_color="#1e1e2e",
             command=self.destroy,

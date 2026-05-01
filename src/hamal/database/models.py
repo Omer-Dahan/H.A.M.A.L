@@ -29,6 +29,7 @@ class Project(Base):
     interpreter_path: Mapped[str] = mapped_column(Text, nullable=False)
     auto_start: Mapped[bool] = mapped_column(nullable=False, default=False)
     auto_restart: Mapped[bool] = mapped_column(nullable=False, default=False)
+    dev_mode: Mapped[bool] = mapped_column(nullable=False, default=False)
     schedule_enabled: Mapped[bool] = mapped_column(nullable=False, default=False)
     schedule_start: Mapped[Optional[str]] = mapped_column(String(5), nullable=True) # HH:MM
     schedule_stop: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)  # HH:MM

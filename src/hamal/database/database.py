@@ -55,6 +55,7 @@ def init_database():
         columns_to_add = {
             "auto_start": "BOOLEAN DEFAULT 0 NOT NULL",
             "auto_restart": "BOOLEAN DEFAULT 0 NOT NULL",
+            "dev_mode": "BOOLEAN DEFAULT 0 NOT NULL",
             "schedule_enabled": "BOOLEAN DEFAULT 0 NOT NULL",
             "schedule_start": "VARCHAR(5)",
             "schedule_stop": "VARCHAR(5)",

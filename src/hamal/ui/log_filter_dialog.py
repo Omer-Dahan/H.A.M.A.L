@@ -1,5 +1,6 @@
 """Log color filter panel – embedded inside the main window (replaces the log panel)."""
 
+from hamal.core.i18n import t
 import re
 
 import customtkinter as ctk
@@ -101,19 +102,19 @@ class LogFilterPanel(ctk.CTkFrame):
 
         ctk.CTkButton(
             header,
-            text="← Back",
+            text=t("← Back"),
             width=100, height=35,
             fg_color=_COLORS["surface"],
             hover_color=_COLORS["overlay"],
             text_color=_COLORS["blue"],
             font=ctk.CTkFont(size=14, weight="bold"),
             corner_radius=12,
-            command=self._go_back,
+            command=self._cancel,
         ).grid(row=0, column=0, sticky="w", padx=(5, 4))
 
         ctk.CTkLabel(
             header,
-            text="Log Color Filters",
+            text=t("Log Color Filters"),
             font=ctk.CTkFont(size=19, weight="bold"),
             text_color=_COLORS["text"],
             anchor="center",
@@ -121,7 +122,7 @@ class LogFilterPanel(ctk.CTkFrame):
 
         ctk.CTkLabel(
             header,
-            text="Esc to go back",
+            text=t("Esc to go back"),
             font=ctk.CTkFont(size=11),
             text_color=_COLORS["subtext"],
             anchor="e",
@@ -146,21 +147,32 @@ class LogFilterPanel(ctk.CTkFrame):
         for i, flt in enumerate(self._filters):
             self._build_filter_row(scroll, i, flt, base_row=i + 2)
 
-        # ── Save button ────────────────────────────────────────────────
+        # ── Action buttons ────────────────────────────────────────────────
         save_bar = ctk.CTkFrame(scroll, fg_color="transparent")
         save_bar.grid(row=_MAX_FILTERS + 2, column=0, pady=(16, 8), sticky="e", padx=16)
 
         ctk.CTkButton(
             save_bar,
-            text="Save Filters",
+            text=t("Cancel"),
+            width=100, height=36,
+            fg_color=_COLORS["surface"],
+            hover_color=_COLORS["overlay"],
+            text_color=_COLORS["text"],
+            corner_radius=8,
+            command=self._cancel,
+        ).pack(side="left", padx=(0, 8))
+
+        ctk.CTkButton(
+            save_bar,
+            text=t("Save Filters"),
             width=130, height=36,
             fg_color=_COLORS["blue"],
             hover_color="#74a8e8",
             text_color="#1e1e2e",
             font=ctk.CTkFont(size=13, weight="bold"),
             corner_radius=8,
-            command=self._go_back,   # saves + goes back
-        ).pack(side="right")
+            command=self._on_save,
+        ).pack(side="left")
 
     def _build_filter_row(self, parent, index: int, flt: dict, base_row: int):
         """Build one filter row inside parent at base_row."""
@@ -213,7 +225,7 @@ class LogFilterPanel(ctk.CTkFrame):
         )
 
         ctk.CTkLabel(
-            chips_frame, text="Color:",
+            chips_frame, text=t("Color:"),
             font=ctk.CTkFont(size=11), text_color=_COLORS["subtext"],
         ).pack(side="left", padx=(0, 6))
 
@@ -231,7 +243,7 @@ class LogFilterPanel(ctk.CTkFrame):
         hex_entry.pack(side="left")
 
         preview_label = ctk.CTkLabel(
-            chips_frame, text="Preview",
+            chips_frame, text=t("Preview"),
             font=ctk.CTkFont(family="Consolas", size=11),
         )
         preview_label.pack(side="left", padx=(10, 0))
@@ -239,7 +251,7 @@ class LogFilterPanel(ctk.CTkFrame):
         def update_preview(*_):
             raw = color_var.get().strip()
             if re.match(r"^#[0-9a-fA-F]{6}$", raw):
-                preview_label.configure(text_color=raw, text="Preview")
+                preview_label.configure(text_color=raw, text=t("Preview"))
         color_var.trace_add("write", update_preview)
         update_preview()
 
@@ -254,7 +266,17 @@ class LogFilterPanel(ctk.CTkFrame):
     # Actions
     # ------------------------------------------------------------------
 
+    def _cancel(self):
+        """Return without saving."""
+        self.refresh()
+        if self._on_back:
+            self._on_back()
+
     def _go_back(self):
+        """Deprecated alias for _cancel."""
+        self._cancel()
+
+    def _on_save(self):
         """Save filters, call saved callback, then navigate back."""
         filters = []
         for row in self._rows:

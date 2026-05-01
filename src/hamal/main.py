@@ -1,6 +1,12 @@
 """H.A.M.A.L application entry point with CustomTkinter."""
 
 import sys
+from pathlib import Path
+
+# Ensure the 'src' directory is in sys.path when running directly (e.g., from Windows Startup)
+_src_dir = str(Path(__file__).resolve().parent.parent)
+if _src_dir not in sys.path:
+    sys.path.insert(0, _src_dir)
 
 import customtkinter as ctk
 

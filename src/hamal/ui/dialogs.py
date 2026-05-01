@@ -1,5 +1,6 @@
 """Dialog windows for adding and editing projects."""
 
+from hamal.core.i18n import t
 from pathlib import Path
 from tkinter import filedialog, messagebox
 from typing import Optional
@@ -46,7 +47,7 @@ class AddProjectDialog(ctk.CTkToplevel):
         # Title
         title = ctk.CTkLabel(
             self,
-            text="Add New Project",
+            text=t("Add New Project"),
             font=ctk.CTkFont(size=20, weight="bold")
         )
         title.grid(row=0, column=0, padx=20, pady=(20, 10))
@@ -57,7 +58,7 @@ class AddProjectDialog(ctk.CTkToplevel):
         form.grid_columnconfigure(1, weight=1)
 
         # Project folder
-        ctk.CTkLabel(form, text="Project Folder:").grid(
+        ctk.CTkLabel(form, text=t("Project Folder:")).grid(
             row=0, column=0, padx=5, pady=10, sticky="e"
         )
 
@@ -65,55 +66,55 @@ class AddProjectDialog(ctk.CTkToplevel):
         folder_frame.grid(row=0, column=1, padx=5, pady=10, sticky="ew")
         folder_frame.grid_columnconfigure(0, weight=1)
 
-        self.folder_entry = ctk.CTkEntry(folder_frame, placeholder_text="Select project folder...")
+        self.folder_entry = ctk.CTkEntry(folder_frame, placeholder_text=t("Select project folder..."))
         self.folder_entry.grid(row=0, column=0, sticky="ew")
 
         browse_btn = ctk.CTkButton(
             folder_frame,
-            text="Browse",
+            text=t("Browse"),
             width=70,
             command=self._browse_folder
         )
         browse_btn.grid(row=0, column=1, padx=(5, 0))
 
         # Project name
-        ctk.CTkLabel(form, text="Project Name:").grid(row=1, column=0, padx=5, pady=10, sticky="e")
-        self.name_entry = ctk.CTkEntry(form, placeholder_text="My Project")
+        ctk.CTkLabel(form, text=t("Project Name:")).grid(row=1, column=0, padx=5, pady=10, sticky="e")
+        self.name_entry = ctk.CTkEntry(form, placeholder_text=t("My Project"))
         self.name_entry.grid(row=1, column=1, padx=5, pady=10, sticky="ew")
 
         # Entry file
-        ctk.CTkLabel(form, text="Entry File:").grid(row=2, column=0, padx=5, pady=10, sticky="e")
+        ctk.CTkLabel(form, text=t("Entry File:")).grid(row=2, column=0, padx=5, pady=10, sticky="e")
 
         entry_frame = ctk.CTkFrame(form, fg_color="transparent")
         entry_frame.grid(row=2, column=1, padx=5, pady=10, sticky="ew")
         entry_frame.grid_columnconfigure(0, weight=1)
 
-        self.entry_entry = ctk.CTkEntry(entry_frame, placeholder_text="main.py")
+        self.entry_entry = ctk.CTkEntry(entry_frame, placeholder_text=t("main.py"))
         self.entry_entry.grid(row=0, column=0, sticky="ew")
 
         entry_browse_btn = ctk.CTkButton(
             entry_frame,
-            text="Browse",
+            text=t("Browse"),
             width=70,
             command=self._browse_entry_file
         )
         entry_browse_btn.grid(row=0, column=1, padx=(5, 0))
 
         # Python interpreter
-        ctk.CTkLabel(form, text="Python:").grid(row=3, column=0, padx=5, pady=10, sticky="e")
+        ctk.CTkLabel(form, text=t("Python:")).grid(row=3, column=0, padx=5, pady=10, sticky="e")
 
         python_frame = ctk.CTkFrame(form, fg_color="transparent")
         python_frame.grid(row=3, column=1, padx=5, pady=10, sticky="ew")
         python_frame.grid_columnconfigure(0, weight=1)
 
         self.python_entry = ctk.CTkEntry(
-            python_frame, placeholder_text="Auto-detected or select..."
+            python_frame, placeholder_text=t("Auto-detected or select...")
         )
         self.python_entry.grid(row=0, column=0, sticky="ew")
 
         python_browse_btn = ctk.CTkButton(
             python_frame,
-            text="Browse",
+            text=t("Browse"),
             width=70,
             command=self._browse_python
         )
@@ -134,7 +135,7 @@ class AddProjectDialog(ctk.CTkToplevel):
 
         cancel_btn = ctk.CTkButton(
             buttons,
-            text="Cancel",
+            text=t("Cancel"),
             width=100,
             fg_color="transparent",
             border_width=1,
@@ -144,7 +145,7 @@ class AddProjectDialog(ctk.CTkToplevel):
 
         add_btn = ctk.CTkButton(
             buttons,
-            text="Add Project",
+            text=t("Add Project"),
             width=100,
             command=self._on_add
         )
@@ -152,7 +153,7 @@ class AddProjectDialog(ctk.CTkToplevel):
 
     def _browse_folder(self):
         """Browse for project folder."""
-        folder = filedialog.askdirectory(title="Select Project Folder")
+        folder = filedialog.askdirectory(title=t("Select Project Folder"))
         if folder:
             self.folder_entry.delete(0, "end")
             self.folder_entry.insert(0, folder)
@@ -166,7 +167,7 @@ class AddProjectDialog(ctk.CTkToplevel):
         initial_dir = folder if folder and Path(folder).exists() else None
 
         file = filedialog.askopenfilename(
-            title="Select Entry Python File",
+            title=t("Select Entry Python File"),
             initialdir=initial_dir,
             filetypes=[("Python files", "*.py"), ("All files", "*.*")]
         )
@@ -178,7 +179,7 @@ class AddProjectDialog(ctk.CTkToplevel):
     def _browse_python(self):
         """Browse for Python interpreter."""
         file = filedialog.askopenfilename(
-            title="Select Python Executable",
+            title=t("Select Python Executable"),
             filetypes=[("Python", "python.exe"), ("All files", "*.*")]
         )
         if file:
@@ -192,9 +193,9 @@ class AddProjectDialog(ctk.CTkToplevel):
         if python:
             self.python_entry.delete(0, "end")
             self.python_entry.insert(0, python)
-            self.status_label.configure(text="✓ Found virtual environment")
+            self.status_label.configure(text=t("✓ Found virtual environment"))
         else:
-            self.status_label.configure(text="⚠ No venv found - please select Python manually")
+            self.status_label.configure(text=t("⚠ No venv found - please select Python manually"))
 
         # Detect entry file
         entry = detect_entry_file(folder)
@@ -286,7 +287,7 @@ class EditProjectDialog(ctk.CTkToplevel):
         # Title
         title = ctk.CTkLabel(
             self,
-            text="Edit Project",
+            text=t("Edit Project"),
             font=ctk.CTkFont(size=20, weight="bold")
         )
         title.grid(row=0, column=0, padx=20, pady=(20, 10))
@@ -297,13 +298,13 @@ class EditProjectDialog(ctk.CTkToplevel):
         form.grid_columnconfigure(1, weight=1)
 
         # Project name
-        ctk.CTkLabel(form, text="Project Name:").grid(row=0, column=0, padx=5, pady=10, sticky="e")
+        ctk.CTkLabel(form, text=t("Project Name:")).grid(row=0, column=0, padx=5, pady=10, sticky="e")
         self.name_entry = ctk.CTkEntry(form)
         self.name_entry.insert(0, self.project.name)
         self.name_entry.grid(row=0, column=1, padx=5, pady=10, sticky="ew")
 
         # Project folder (read-only display)
-        ctk.CTkLabel(form, text="Folder:").grid(row=1, column=0, padx=5, pady=10, sticky="e")
+        ctk.CTkLabel(form, text=t("Folder:")).grid(row=1, column=0, padx=5, pady=10, sticky="e")
         folder_label = ctk.CTkLabel(
             form,
             text=self.project.folder_path,
@@ -313,7 +314,7 @@ class EditProjectDialog(ctk.CTkToplevel):
         folder_label.grid(row=1, column=1, padx=5, pady=10, sticky="w")
 
         # Entry file
-        ctk.CTkLabel(form, text="Entry File:").grid(row=2, column=0, padx=5, pady=10, sticky="e")
+        ctk.CTkLabel(form, text=t("Entry File:")).grid(row=2, column=0, padx=5, pady=10, sticky="e")
 
         py_files = get_python_files(self.project.folder_path)
         if not py_files:
@@ -329,7 +330,7 @@ class EditProjectDialog(ctk.CTkToplevel):
         self.entry_combo.grid(row=2, column=1, padx=5, pady=10, sticky="ew")
 
         # Python interpreter
-        ctk.CTkLabel(form, text="Python:").grid(row=3, column=0, padx=5, pady=10, sticky="e")
+        ctk.CTkLabel(form, text=t("Python:")).grid(row=3, column=0, padx=5, pady=10, sticky="e")
 
         python_frame = ctk.CTkFrame(form, fg_color="transparent")
         python_frame.grid(row=3, column=1, padx=5, pady=10, sticky="ew")
@@ -341,7 +342,7 @@ class EditProjectDialog(ctk.CTkToplevel):
 
         python_browse_btn = ctk.CTkButton(
             python_frame,
-            text="Browse",
+            text=t("Browse"),
             width=70,
             command=self._browse_python
         )
@@ -353,7 +354,7 @@ class EditProjectDialog(ctk.CTkToplevel):
 
         cancel_btn = ctk.CTkButton(
             buttons,
-            text="Cancel",
+            text=t("Cancel"),
             width=100,
             fg_color="transparent",
             border_width=1,
@@ -363,7 +364,7 @@ class EditProjectDialog(ctk.CTkToplevel):
 
         save_btn = ctk.CTkButton(
             buttons,
-            text="Save Changes",
+            text=t("Save Changes"),
             width=100,
             command=self._on_save
         )
@@ -372,7 +373,7 @@ class EditProjectDialog(ctk.CTkToplevel):
     def _browse_python(self):
         """Browse for Python interpreter."""
         file = filedialog.askopenfilename(
-            title="Select Python Executable",
+            title=t("Select Python Executable"),
             filetypes=[("Python", "python.exe"), ("All files", "*.*")]
         )
         if file:

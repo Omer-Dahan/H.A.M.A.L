@@ -97,7 +97,8 @@ class ProcessManager:
 
             info = self._processes[project_id]
             if info.process.poll() is not None:
-                return (ProcessStatus.CRASHED if info.process.returncode != 0
+                user_stopped = project_id in self._user_stopped
+                return (ProcessStatus.CRASHED if info.process.returncode != 0 and not user_stopped
                         else ProcessStatus.STOPPED)
 
             return ProcessStatus.RUNNING
@@ -305,12 +306,13 @@ class ProcessManager:
             info = self._processes[project_id]
             already_dead = info.process.poll() is not None
             exit_code = info.process.returncode if already_dead else None
+            user_stopped = project_id in self._user_stopped
 
         if already_dead:
             # The monitor thread will (or already did) emit the real CRASHED/STOPPED
             # status and run cleanup. Nudge the UI immediately so the user gets
             # feedback even if the monitor's callback is delayed.
-            final = ProcessStatus.CRASHED if exit_code != 0 else ProcessStatus.STOPPED
+            final = ProcessStatus.CRASHED if exit_code != 0 and not user_stopped else ProcessStatus.STOPPED
             self._emit_status(project_id, final.value)
             return False
 

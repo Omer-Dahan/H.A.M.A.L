@@ -1,5 +1,6 @@
 """About dialog window."""
 
+from hamal.core.i18n import t
 import customtkinter as ctk
 
 from hamal.core.config import APP_NAME, APP_VERSION
@@ -86,14 +87,14 @@ class AboutDialog(ctk.CTkToplevel):
         # Credits
         ctk.CTkLabel(
             self,
-            text="Made with ❤️ by Omer Dahan",
+            text=t("Made with ❤️ by Omer Dahan"),
             font=ctk.CTkFont(size=13)
         ).grid(row=5, column=0, pady=5)
 
         # Close button
         ctk.CTkButton(
             self,
-            text="Close",
+            text=t("Close"),
             command=self.destroy,
             width=100
         ).grid(row=6, column=0, pady=(30, 20))

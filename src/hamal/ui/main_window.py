@@ -1,5 +1,6 @@
 """Main application window using CustomTkinter."""
 
+from hamal.core.i18n import t
 from tkinter import messagebox
 
 import customtkinter as ctk
@@ -159,7 +160,7 @@ class MainWindow(ctk.CTk):
         # File menu button
         self.file_btn = ctk.CTkButton(
             self.menu_buttons_container,
-            text="File",
+            text=t("File"),
             width=50,
             command=lambda: self._toggle_dropdown("file"),
             **menu_btn_style
@@ -169,7 +170,7 @@ class MainWindow(ctk.CTk):
         # Projects menu button
         self.projects_btn = ctk.CTkButton(
             self.menu_buttons_container,
-            text="Projects",
+            text=t("Projects"),
             width=70,
             command=lambda: self._toggle_dropdown("projects"),
             **menu_btn_style
@@ -179,7 +180,7 @@ class MainWindow(ctk.CTk):
         # Help menu button
         self.help_btn = ctk.CTkButton(
             self.menu_buttons_container,
-            text="Help",
+            text=t("Help"),
             width=50,
             command=lambda: self._toggle_dropdown("help"),
             **menu_btn_style
@@ -213,7 +214,7 @@ class MainWindow(ctk.CTk):
         self.file_dropdown = ctk.CTkFrame(self, **dropdown_style)
         ctk.CTkButton(
             self.file_dropdown,
-            text="Settings",
+            text=t("Settings"),
             width=100,
             command=lambda: self._menu_action(self._on_settings),
             **item_style
@@ -225,7 +226,7 @@ class MainWindow(ctk.CTk):
 
         ctk.CTkButton(
             self.file_dropdown,
-            text="Exit",
+            text=t("Exit"),
             width=100,
             command=lambda: self._menu_action(self._on_closing),
             **item_style
@@ -235,7 +236,7 @@ class MainWindow(ctk.CTk):
         self.projects_dropdown = ctk.CTkFrame(self, **dropdown_style)
         ctk.CTkButton(
             self.projects_dropdown,
-            text="Add Project...",
+            text=t("Add Project..."),
             width=130,
             command=lambda: self._menu_action(self._on_add_project),
             **item_style
@@ -247,7 +248,7 @@ class MainWindow(ctk.CTk):
 
         ctk.CTkButton(
             self.projects_dropdown,
-            text="Start All",
+            text=t("Start All"),
             width=130,
             command=lambda: self._menu_action(self._on_start_all),
             **item_style
@@ -255,7 +256,7 @@ class MainWindow(ctk.CTk):
 
         ctk.CTkButton(
             self.projects_dropdown,
-            text="Stop All",
+            text=t("Stop All"),
             width=130,
             command=lambda: self._menu_action(self._on_stop_all),
             **item_style
@@ -440,7 +441,7 @@ class MainWindow(ctk.CTk):
 
         self.status_label = ctk.CTkLabel(
             self.status_bar,
-            text="Ready",
+            text=t("Ready"),
             font=ctk.CTkFont(size=11),
             text_color=COLORS["subtext"],
             anchor="w"
@@ -789,5 +790,5 @@ class MainWindow(ctk.CTk):
         if self._auto_start_timers:
             self.after(1000, self._auto_start_tick)
         else:
-            self.status_label.configure(text="Auto-start sequence complete")
+            self.status_label.configure(text=t("Auto-start sequence complete"))
             self.after(3000, self._update_status_bar)

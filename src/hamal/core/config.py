@@ -14,7 +14,7 @@ except ImportError:
 def get_data_dir() -> Path:
     """Get the application data directory. Creates it if it doesn't exist.
     
-    Uses %LOCALAPPDATA%\HAMAL\ on Windows for installer compatibility.
+    Uses %LOCALAPPDATA%\\HAMAL\\ on Windows for installer compatibility.
     This keeps user data separate from Program Files (read-only).
     """
     local_app_data = os.environ.get("LOCALAPPDATA")
@@ -107,9 +107,15 @@ def set_run_on_startup(enabled: bool) -> bool:
         # Running as compiled EXE
         app_path = f'"{sys.executable}"'
     else:
-        # Running as script - we probably don't want to register the python interp
-        # but for dev testing we'll allow it. In production (installer) it will be frozen.
-        app_path = f'"{sys.executable}" "{Path(__file__).parents[2] / "hamal" / "main.py"}"'
+        # Running as script
+        exe_path = Path(sys.executable)
+        # Try to use pythonw.exe instead of python.exe to hide the console window
+        if exe_path.name.lower() == "python.exe":
+            pythonw = exe_path.with_name("pythonw.exe")
+            if pythonw.exists():
+                exe_path = pythonw
+                
+        app_path = f'"{exe_path}" "{Path(__file__).parents[2] / "hamal" / "main.py"}"'
 
     try:
         key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"

@@ -1,5 +1,6 @@
 """Log panel widget using CustomTkinter - Live logs view."""
 
+from hamal.core.i18n import t
 import os
 import re
 import tkinter as tk
@@ -51,7 +52,7 @@ class LogPanel(ctk.CTkFrame):
         # Title with project name
         self.title = ctk.CTkLabel(
             self.header,
-            text="Logs",
+            text=t("Logs"),
             font=ctk.CTkFont(size=18, weight="bold"),
             text_color=COLORS["text"]
         )
@@ -63,7 +64,7 @@ class LogPanel(ctk.CTkFrame):
         # Live indicator
         self.live_label = ctk.CTkLabel(
             self.buttons_frame,
-            text="● LIVE",
+            text=t("● LIVE"),
             font=ctk.CTkFont(size=11, weight="bold"),
             text_color=COLORS["green"]
         )
@@ -87,7 +88,7 @@ class LogPanel(ctk.CTkFrame):
         # Clear button
         self.clear_btn = ctk.CTkButton(
             self.buttons_frame,
-            text="Clear",
+            text=t("Clear"),
             font=ctk.CTkFont(size=11),
             width=55,
             height=28,
@@ -140,7 +141,7 @@ class LogPanel(ctk.CTkFrame):
         # === STATUS BAR ===
         self.status_bar = ctk.CTkLabel(
             self,
-            text="Select a project to view live logs",
+            text=t("Select a project to view live logs"),
             font=ctk.CTkFont(size=11),
             text_color=COLORS["subtext"],
             anchor="w"
@@ -212,7 +213,7 @@ class LogPanel(ctk.CTkFrame):
         self.title.configure(text=f"Logs - {project_name}")
 
         # Show live indicator
-        self.live_label.configure(text="● LIVE", text_color=COLORS["green"])
+        self.live_label.configure(text=t("● LIVE"), text_color=COLORS["green"])
 
         # Update status
         self.status_bar.configure(text=f"Viewing live logs for: {project_name}")
@@ -382,7 +383,14 @@ class LogPanel(ctk.CTkFrame):
     def _clear_logs(self):
         """Clear logs for the current project."""
         if self.current_project_id:
-            self.logs[self.current_project_id] = []
-        self.log_text.configure(state="normal")
-        self.log_text.delete("1.0", "end")
-        self.log_text.configure(state="disabled")
+            self.clear_project_logs(self.current_project_id)
+
+    def clear_project_logs(self, project_id: int):
+        """Clear logs for a specific project. Refreshes UI if it is the current project."""
+        if project_id in self.logs:
+            self.logs[project_id] = []
+            
+        if self.current_project_id == project_id:
+            self.log_text.configure(state="normal")
+            self.log_text.delete("1.0", "end")
+            self.log_text.configure(state="disabled")
