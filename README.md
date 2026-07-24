@@ -8,7 +8,7 @@
 
 **H**ybrid **A**utomated **M**anagement **A**nd **L**ogging
 
-![Version](https://img.shields.io/badge/version-0.1.2-blue?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.0.0-blue?style=for-the-badge)
 ![Python](https://img.shields.io/badge/python-3.10+-green?style=for-the-badge&logo=python)
 ![Platform](https://img.shields.io/badge/platform-windows-blue?style=for-the-badge&logo=windows)
 ![License](https://img.shields.io/badge/license-MIT-orange?style=for-the-badge)

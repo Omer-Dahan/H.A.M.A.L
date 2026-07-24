@@ -25,6 +25,7 @@ class ProcessStatus(Enum):
     RUNNING = "running"
     STOPPING = "stopping"
     CRASHED = "crashed"
+    INSTALLING = "installing"
 
 
 @dataclass
@@ -76,6 +77,7 @@ class ProcessManager:
         self._processes: dict[int, ProcessInfo] = {}
         self._project_names: dict[int, str] = {}
         self._user_stopped: set[int] = set()  # IDs the user asked to stop — exit isn't a crash
+        self._installing_projects: set[int] = set()
         self._lock = threading.Lock()
 
         # Callbacks (set by UI)
@@ -92,6 +94,8 @@ class ProcessManager:
         owns cleanup and the crash callback.
         """
         with self._lock:
+            if project_id in self._installing_projects:
+                return ProcessStatus.INSTALLING
             if project_id not in self._processes:
                 return ProcessStatus.STOPPED
 
@@ -165,6 +169,12 @@ class ProcessManager:
         """Start a project subprocess."""
         # pylint: disable=logging-fstring-interpolation
         logger = logging.getLogger(__name__)
+
+        with self._lock:
+            if project.id in self._installing_projects:
+                logger.warning(f"  [SKIP] Process dependencies are installing for {project.name}")
+                self._emit_log(project.id, f"[HAMAL] ⏳ Cannot start project while dependencies are installing...")
+                return False
 
         # === DEBUG LOGGING ===
         logger.info("="*50)
@@ -404,3 +414,74 @@ class ProcessManager:
             if project_id in self._processes:
                 return self._processes[project_id].log_handler
         return None
+
+    def install_dependencies_async(self, project: Project, on_complete: Callable[[bool], None]):
+        """Run pip install -r requirements.txt in the background."""
+        logger = logging.getLogger(__name__)
+        
+        with self._lock:
+            if project.id in self._processes and self._processes[project.id].process.poll() is None:
+                logger.warning(f"  [SKIP] Cannot install dependencies while {project.name} is running")
+                return
+            self._installing_projects.add(project.id)
+            
+        self._emit_status(project.id, ProcessStatus.INSTALLING.value)
+        self._emit_log(project.id, f"[HAMAL] 📦 Installing project dependencies (requirements.txt)...")
+        
+        def run_pip():
+            try:
+                interpreter = project.interpreter_path
+                req_file = Path(project.folder_path) / "requirements.txt"
+                
+                if not Path(interpreter).exists() or not req_file.exists():
+                    self._emit_log(project.id, "[HAMAL] ❌ Interpreter or requirements.txt not found.")
+                    with self._lock:
+                        self._installing_projects.discard(project.id)
+                    self._emit_status(project.id, ProcessStatus.STOPPED.value)
+                    on_complete(False)
+                    return
+                
+                env = os.environ.copy()
+                env["PYTHONIOENCODING"] = "utf-8"
+                env["PYTHONUTF8"] = "1"
+                env["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
+
+                # pylint: disable=consider-using-with
+                process = subprocess.Popen(
+                    [interpreter, "-m", "pip", "install", "-r", str(req_file)],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    cwd=str(Path(project.folder_path)),
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    bufsize=1,
+                    env=env,
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                )
+
+                for line in iter(process.stdout.readline, ""):
+                    if not line:
+                        break
+                    line = line.rstrip("\n\r")
+                    self._emit_log(project.id, f"[PIP] {line}")
+                
+                process.stdout.close()
+                exit_code = process.wait()
+                
+                success = (exit_code == 0)
+                
+                with self._lock:
+                    self._installing_projects.discard(project.id)
+                self._emit_status(project.id, ProcessStatus.STOPPED.value)
+                on_complete(success)
+                
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                self._emit_log(project.id, f"[ERROR] Failed to install dependencies: {e}")
+                with self._lock:
+                    self._installing_projects.discard(project.id)
+                self._emit_status(project.id, ProcessStatus.STOPPED.value)
+                on_complete(False)
+                
+        thread = threading.Thread(target=run_pip, daemon=True)
+        thread.start()

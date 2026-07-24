@@ -167,7 +167,7 @@ class Dashboard(ctk.CTkFrame):
         # Empty state
         self.empty_label = ctk.CTkLabel(
             self.table_body,
-            text=t("No projects yet.\nClick ")+ Add Project' to get started!",
+            text=t("No projects yet.\nClick 'Add Project' to get started!"),
             font=ctk.CTkFont(size=14),
             text_color=COLORS["subtext"]
         )
@@ -418,6 +418,7 @@ class Dashboard(ctk.CTkFrame):
             ProcessStatus.RUNNING: (COLORS["green"], "Running", True),
             ProcessStatus.STOPPING: (COLORS["yellow"], "Stopping...", False),
             ProcessStatus.CRASHED: (COLORS["red"], "Crashed", False),
+            ProcessStatus.INSTALLING: (COLORS["yellow"], "Installing...", False),
         }
 
         color, text, is_running = status_config.get(status, (COLORS["subtext"], "Unknown", False))
@@ -427,6 +428,11 @@ class Dashboard(ctk.CTkFrame):
 
         if not is_running:
             row["uptime"].configure(text="-")
+            
+        if status == ProcessStatus.INSTALLING:
+            row["play_btn"].configure(state="disabled", fg_color=COLORS["overlay"])
+        else:
+            row["play_btn"].configure(state="normal", fg_color=COLORS["green"])
 
     def _on_add_project(self):
         """Show add project panel (in-app)."""

@@ -10,6 +10,12 @@ from typing import Callable, Optional
 
 import customtkinter as ctk
 
+from hamal.core.python_environment import (
+    ensure_environment_async,
+    find_system_python_async,
+    is_winget_available,
+    venv_python_path,
+)
 from hamal.database.crud import create_project, update_project
 from hamal.database.models import Project
 from hamal.ui.settings_dialog import _patch_scroll_speed
@@ -44,7 +50,7 @@ class ProjectFormPanel(ctk.CTkFrame):
         self,
         master,
         on_back: Optional[Callable] = None,
-        on_saved: Optional[Callable[[Project], None]] = None,
+        on_saved: Optional[Callable[[Project, bool], None]] = None,
         project: Optional[Project] = None,
         **kwargs,
     ):
@@ -53,6 +59,11 @@ class ProjectFormPanel(ctk.CTkFrame):
         self._on_saved = on_saved
         self._project = project  # None = Add mode
         self._is_edit = project is not None
+
+        # Environment-creation state (see _on_create_env)
+        self._venv_btn = None
+        self._venv_busy = False
+        self._needs_python_install = False
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
@@ -84,6 +95,11 @@ class ProjectFormPanel(ctk.CTkFrame):
     # ------------------------------------------------------------------
 
     def _build_ui(self):
+        # Widgets are rebuilt from scratch – drop stale environment state
+        self._venv_btn = None
+        self._venv_busy = False
+        self._needs_python_install = False
+
         # Configure the main panel grid
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=0)  # Header
@@ -108,7 +124,7 @@ class ProjectFormPanel(ctk.CTkFrame):
             command=self._cancel,
         ).grid(row=0, column=0, sticky="w", padx=(5, 4))
 
-        title_text=t("Project Settings") if self._is_edit else "Add New Project"
+        title_text = t("Project Settings") if self._is_edit else t("Add New Project")
         ctk.CTkLabel(
             header,
             text=title_text,
@@ -117,13 +133,20 @@ class ProjectFormPanel(ctk.CTkFrame):
             anchor="center",
         ).grid(row=0, column=1, sticky="ew")
 
-        ctk.CTkLabel(
+        save_text = t("Save Changes") if self._is_edit else t("Add Project")
+        save_color = _COLORS["blue"]
+        self.top_save_btn = ctk.CTkButton(
             header,
-            text=t("Esc to cancel"),
-            font=ctk.CTkFont(size=11),
-            text_color=_COLORS["subtext"],
-            anchor="e",
-        ).grid(row=0, column=2, sticky="e", padx=(4, 15))
+            text=save_text,
+            width=130, height=35,
+            fg_color=save_color,
+            hover_color="#74a8e8",
+            text_color="#1e1e2e",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            corner_radius=12,
+            command=self._on_save,
+        )
+        self.top_save_btn.grid(row=0, column=2, sticky="e", padx=(4, 15))
 
         # ── Scrollable Area ────────────────────────────────────────────
         scroll = ctk.CTkScrollableFrame(
@@ -289,34 +312,7 @@ class ProjectFormPanel(ctk.CTkFrame):
             )
             self._req_btn.grid(row=0, column=3, padx=(8, 16), pady=14, sticky="e")
 
-        # ── Action buttons ─────────────────────────────────────────────
-        btn_frame = ctk.CTkFrame(scroll, fg_color="transparent")
-        btn_frame.grid(row=11, column=0, padx=16, pady=(16, 24), sticky="e")
 
-        ctk.CTkButton(
-            btn_frame,
-            text=t("Cancel"),
-            width=100, height=36,
-            fg_color=_COLORS["surface"],
-            hover_color=_COLORS["overlay"],
-            text_color=_COLORS["text"],
-            corner_radius=8,
-            command=self._cancel,
-        ).pack(side="left", padx=(0, 8))
-
-        save_text=t("Save Changes") if self._is_edit else "Add Project"
-        save_color = _COLORS["blue"] if self._is_edit else _COLORS["green"]
-        ctk.CTkButton(
-            btn_frame,
-            text=save_text,
-            width=130, height=36,
-            fg_color=save_color,
-            hover_color="#74a8e8" if self._is_edit else "#8fcf8c",
-            text_color="#1e1e2e",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            corner_radius=8,
-            command=self._on_save,
-        ).pack(side="left")
 
     def _field_row(self, parent, label: str, row: int):
         """Render a label in col=0; returns row index for caller to place field in col=1."""
@@ -505,12 +501,30 @@ class ProjectFormPanel(ctk.CTkFrame):
             command=self._browse_python,
         ).grid(row=0, column=1, padx=(6, 0))
 
-        # Status hint
+        # Status hint (left) + environment action button (right)
+        status_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        status_frame.grid(row=4, column=0, columnspan=2, padx=16, pady=(0, 8), sticky="ew")
+        status_frame.grid_columnconfigure(0, weight=1)
+
         self._status_label = ctk.CTkLabel(
-            parent, text="",
+            status_frame, text="",
             font=ctk.CTkFont(size=11), text_color=_COLORS["subtext"],
+            anchor="w", justify="left",
         )
-        self._status_label.grid(row=4, column=0, columnspan=2, padx=16, pady=(0, 8), sticky="w")
+        self._status_label.grid(row=0, column=0, sticky="w")
+
+        self._venv_btn = ctk.CTkButton(
+            status_frame,
+            text=t("Create venv"),
+            width=110, height=26,
+            fg_color=_COLORS["blue"],
+            hover_color="#74a8e8",
+            text_color="#1e1e2e",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            corner_radius=6,
+            command=self._on_create_env,
+        )
+        # Placed only when the scan finds no environment (see _auto_detect).
 
     # ------------------------------------------------------------------
     # Edit form
@@ -567,6 +581,7 @@ class ProjectFormPanel(ctk.CTkFrame):
         ).grid(row=0, column=1, padx=(6, 0))
 
         self._status_label = None  # not used in edit mode
+        self._venv_btn = None
 
     # ------------------------------------------------------------------
     # Browsing helpers
@@ -605,19 +620,125 @@ class ProjectFormPanel(ctk.CTkFrame):
         if python:
             self.python_entry.delete(0, "end")
             self.python_entry.insert(0, python)
-            if self._status_label:
-                self._status_label.configure(text=t("✓ Found virtual environment"), text_color=_COLORS["green"])
+            self._set_status(t("✓ Found virtual environment"), _COLORS["green"])
+            self._hide_venv_button()
         else:
-            if self._status_label:
-                self._status_label.configure(
-                    text=t("⚠ No venv found – select Python manually"), text_color=_COLORS["red"]
-                )
+            self._set_status(t("⚠ No venv found – select Python manually"), _COLORS["red"])
+            self._show_venv_button()
         entry = detect_entry_file(folder)
         if entry:
             self.entry_entry.delete(0, "end")
             self.entry_entry.insert(0, entry)
         if not self.name_entry.get():
             self.name_entry.insert(0, Path(folder).name)
+
+    # ------------------------------------------------------------------
+    # Python environment creation
+    # ------------------------------------------------------------------
+
+    def _set_status(self, text: str, color: str):
+        if self._status_label is not None and self._status_label.winfo_exists():
+            self._status_label.configure(text=text, text_color=color)
+
+    def _post(self, fn, *args):
+        """Hop back to the Tk thread; drops the call if the panel is already gone."""
+        try:
+            self.after(0, fn, *args)
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
+
+    def _venv_btn_alive(self) -> bool:
+        return self._venv_btn is not None and bool(self._venv_btn.winfo_exists())
+
+    def _hide_venv_button(self):
+        if self._venv_btn_alive():
+            self._venv_btn.grid_forget()
+
+    def _show_venv_button(self):
+        """Offer to build the environment, next to the warning."""
+        if not self._venv_btn_alive():
+            return
+        self._needs_python_install = False
+        self._venv_btn.configure(text=t("Create venv"), state="normal")
+        self._venv_btn.grid(row=0, column=1, padx=(8, 0), sticky="e")
+        # Probing `py`/`python` spawns processes – keep it off the UI thread.
+        find_system_python_async(lambda p: self._post(self._on_python_probe, p))
+
+    def _on_python_probe(self, python_exe: Optional[str]):
+        """Switch the button to `Install Python` when the machine has no Python."""
+        if not self._venv_btn_alive() or self._venv_busy:
+            return
+        self._needs_python_install = python_exe is None
+        if python_exe is None:
+            self._venv_btn.configure(text=t("Install Python"))
+            self._set_status(t("⚠ No venv and no Python found on this computer"), _COLORS["red"])
+        else:
+            self._venv_btn.configure(text=t("Create venv"))
+
+    def _on_create_env(self):
+        if self._venv_busy:
+            return
+
+        folder = self.folder_entry.get().strip()
+        if not folder or not Path(folder).is_dir():
+            messagebox.showerror("Error", "Please select a project folder first")
+            return
+
+        allow_install = False
+        if self._needs_python_install:
+            if not is_winget_available():
+                messagebox.showerror(
+                    "Python not found",
+                    "Python is not installed and Windows Package Manager (winget) "
+                    "is not available.\n\n"
+                    "Install Python manually from https://www.python.org/downloads/",
+                )
+                return
+            confirmed = messagebox.askyesno(
+                "Install Python?",
+                "Python was not found on this computer.\n\n"
+                "Install Python using Windows Package Manager (winget)?\n\n"
+                "This downloads from the internet, may ask for permission, and can "
+                "take a few minutes. You may need to restart H.A.M.A.L afterwards.",
+            )
+            if not confirmed:
+                return
+            allow_install = True
+
+        self._venv_busy = True
+        self._venv_btn.configure(state="disabled")
+        self._set_status(t("Creating virtual environment…"), _COLORS["yellow"])
+
+        ensure_environment_async(
+            folder,
+            on_done=lambda result: self._post(self._on_env_done, result),
+            allow_install=allow_install,
+            on_status=lambda text: self._post(self._set_status, text, _COLORS["yellow"]),
+        )
+
+    def _on_env_done(self, result):
+        self._venv_busy = False
+        if not self.winfo_exists():
+            return
+
+        if result.success:
+            python = result.python_path or str(venv_python_path(self.folder_entry.get().strip()))
+            self.python_entry.delete(0, "end")
+            self.python_entry.insert(0, python)
+            self._set_status(t("✓ Virtual environment ready"), _COLORS["green"])
+            self._hide_venv_button()
+            return
+
+        # Failure – bring the button back and explain what happened
+        self._needs_python_install = result.needs_python_install
+        if self._venv_btn_alive():
+            self._venv_btn.configure(
+                state="normal",
+                text=t("Install Python") if result.needs_python_install else t("Create venv"),
+            )
+        first_line = result.message.strip().splitlines()[0]
+        self._set_status(f"✗ {first_line}", _COLORS["red"])
+        messagebox.showerror("Environment setup failed", result.message)
 
     # ------------------------------------------------------------------
     # Save / Cancel
@@ -628,6 +749,13 @@ class ProjectFormPanel(ctk.CTkFrame):
             self._on_back()
 
     def _on_save(self):
+        if self._venv_busy:
+            messagebox.showinfo(
+                "Please wait",
+                "The virtual environment is still being created.\n"
+                "Wait for it to finish before saving the project.",
+            )
+            return
         if self._is_edit:
             self._save_edit()
         else:
@@ -674,7 +802,7 @@ class ProjectFormPanel(ctk.CTkFrame):
                 schedule_days=sched_days,
             )
             if self._on_saved:
-                self._on_saved(project)
+                self._on_saved(project, True)
             if self._on_back:
                 self._on_back()
         except Exception as e:  # pylint: disable=broad-exception-caught
@@ -717,7 +845,7 @@ class ProjectFormPanel(ctk.CTkFrame):
                 schedule_days=sched_days,
             )
             if self._on_saved:
-                self._on_saved(project)
+                self._on_saved(project, False)
             if self._on_back:
                 self._on_back()
         except Exception as e:  # pylint: disable=broad-exception-caught

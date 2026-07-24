@@ -137,7 +137,7 @@ def set_run_on_startup(enabled: bool) -> bool:
 
 # Application constants
 APP_NAME = "H.A.M.A.L"
-APP_VERSION = "0.2.0"
+APP_VERSION = "1.0.0"
 
 # Default entry file patterns to look for when adding a project
 # pylint: disable=duplicate-code

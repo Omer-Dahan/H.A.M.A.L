@@ -7,6 +7,12 @@ from typing import Optional
 
 import customtkinter as ctk
 
+from hamal.core.python_environment import (
+    ensure_environment_async,
+    find_system_python_async,
+    is_winget_available,
+    venv_python_path,
+)
 from hamal.database.crud import create_project, update_project
 from hamal.database.models import Project
 from hamal.utils.helpers import detect_entry_file, detect_python_interpreter, get_python_files
@@ -19,6 +25,11 @@ class AddProjectDialog(ctk.CTkToplevel):
         super().__init__(master)
 
         self.result = None
+
+        # Environment-creation state (see _on_create_env)
+        self._venv_btn = None
+        self._venv_busy = False
+        self._needs_python_install = False
 
         # Window config
         self.title("Add Project")
@@ -120,14 +131,29 @@ class AddProjectDialog(ctk.CTkToplevel):
         )
         python_browse_btn.grid(row=0, column=1, padx=(5, 0))
 
-        # Status label
+        # Status label (left) + environment action button (right)
+        status_frame = ctk.CTkFrame(self, fg_color="transparent")
+        status_frame.grid(row=2, column=0, padx=20, pady=5, sticky="ew")
+        status_frame.grid_columnconfigure(0, weight=1)
+
         self.status_label = ctk.CTkLabel(
-            self,
+            status_frame,
             text="",
             font=ctk.CTkFont(size=12),
-            text_color=("gray50", "gray50")
+            text_color=("gray50", "gray50"),
+            anchor="w",
         )
-        self.status_label.grid(row=2, column=0, padx=20, pady=5)
+        self.status_label.grid(row=0, column=0, sticky="w")
+
+        self._venv_btn = ctk.CTkButton(
+            status_frame,
+            text=t("Create venv"),
+            width=110,
+            height=26,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            command=self._on_create_env,
+        )
+        # Placed only when the scan finds no environment (see _auto_detect).
 
         # Buttons
         buttons = ctk.CTkFrame(self, fg_color="transparent")
@@ -194,8 +220,10 @@ class AddProjectDialog(ctk.CTkToplevel):
             self.python_entry.delete(0, "end")
             self.python_entry.insert(0, python)
             self.status_label.configure(text=t("✓ Found virtual environment"))
+            self._hide_venv_button()
         else:
             self.status_label.configure(text=t("⚠ No venv found - please select Python manually"))
+            self._show_venv_button()
 
         # Detect entry file
         entry = detect_entry_file(folder)
@@ -209,8 +237,126 @@ class AddProjectDialog(ctk.CTkToplevel):
             folder_name = Path(folder).name
             self.name_entry.insert(0, folder_name)
 
+    # ------------------------------------------------------------------
+    # Python environment creation
+    # ------------------------------------------------------------------
+
+    def _post(self, fn, *args):
+        """Hop back to the Tk thread; drops the call if the dialog is already gone."""
+        try:
+            self.after(0, fn, *args)
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
+
+    def _venv_btn_alive(self) -> bool:
+        return self._venv_btn is not None and bool(self._venv_btn.winfo_exists())
+
+    def _hide_venv_button(self):
+        if self._venv_btn_alive():
+            self._venv_btn.grid_forget()
+
+    def _show_venv_button(self):
+        """Offer to build the environment, next to the warning."""
+        if not self._venv_btn_alive():
+            return
+        self._needs_python_install = False
+        self._venv_btn.configure(text=t("Create venv"), state="normal")
+        self._venv_btn.grid(row=0, column=1, padx=(8, 0), sticky="e")
+        # Probing `py`/`python` spawns processes - keep it off the UI thread.
+        find_system_python_async(lambda p: self._post(self._on_python_probe, p))
+
+    def _on_python_probe(self, python_exe: Optional[str]):
+        """Switch the button to `Install Python` when the machine has no Python."""
+        if not self._venv_btn_alive() or self._venv_busy:
+            return
+        self._needs_python_install = python_exe is None
+        if python_exe is None:
+            self._venv_btn.configure(text=t("Install Python"))
+            self.status_label.configure(text=t("⚠ No venv and no Python found on this computer"))
+        else:
+            self._venv_btn.configure(text=t("Create venv"))
+
+    def _on_create_env(self):
+        if self._venv_busy:
+            return
+
+        folder = self.folder_entry.get().strip()
+        if not folder or not Path(folder).is_dir():
+            messagebox.showerror("Error", "Please select a project folder first", parent=self)
+            return
+
+        allow_install = False
+        if self._needs_python_install:
+            if not is_winget_available():
+                messagebox.showerror(
+                    "Python not found",
+                    "Python is not installed and Windows Package Manager (winget) "
+                    "is not available.\n\n"
+                    "Install Python manually from https://www.python.org/downloads/",
+                    parent=self,
+                )
+                return
+            confirmed = messagebox.askyesno(
+                "Install Python?",
+                "Python was not found on this computer.\n\n"
+                "Install Python using Windows Package Manager (winget)?\n\n"
+                "This downloads from the internet, may ask for permission, and can "
+                "take a few minutes. You may need to restart H.A.M.A.L afterwards.",
+                parent=self,
+            )
+            if not confirmed:
+                return
+            allow_install = True
+
+        self._venv_busy = True
+        self._venv_btn.configure(state="disabled")
+        self.status_label.configure(text=t("Creating virtual environment..."))
+
+        ensure_environment_async(
+            folder,
+            on_done=lambda result: self._post(self._on_env_done, result),
+            allow_install=allow_install,
+            on_status=lambda text: self._post(self._set_status, text),
+        )
+
+    def _set_status(self, text: str):
+        if self.status_label.winfo_exists():
+            self.status_label.configure(text=text)
+
+    def _on_env_done(self, result):
+        self._venv_busy = False
+        if not self.winfo_exists():
+            return
+
+        if result.success:
+            python = result.python_path or str(venv_python_path(self.folder_entry.get().strip()))
+            self.python_entry.delete(0, "end")
+            self.python_entry.insert(0, python)
+            self._set_status(t("✓ Virtual environment ready"))
+            self._hide_venv_button()
+            return
+
+        # Failure - bring the button back and explain what happened
+        self._needs_python_install = result.needs_python_install
+        if self._venv_btn_alive():
+            self._venv_btn.configure(
+                state="normal",
+                text=t("Install Python") if result.needs_python_install else t("Create venv"),
+            )
+        self._set_status(f"✗ {result.message.strip().splitlines()[0]}")
+        messagebox.showerror("Environment setup failed", result.message, parent=self)
+
     def _on_add(self):
         """Handle add button click."""
+        if self._venv_busy:
+            messagebox.showinfo(
+                "Please wait",
+                "The virtual environment is still being created.\n"
+                "Wait for it to finish before saving the project.",
+                parent=self,
+            )
+            return
+
         folder = self.folder_entry.get().strip()
         name = self.name_entry.get().strip()
         entry = self.entry_entry.get().strip()

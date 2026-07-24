@@ -8,7 +8,7 @@ import customtkinter as ctk
 from hamal.core.config import APP_NAME, APP_VERSION, load_settings
 from hamal.core.process_manager import ProcessManager, ProcessStatus
 from hamal.database.crud import get_all_projects, get_project_by_id
-from hamal.ui.about_dialog import AboutDialog
+from hamal.ui.about_dialog import AboutPanel
 from hamal.ui.dashboard import Dashboard
 from hamal.ui.icons import get_icons_dir
 from hamal.ui.log_filter_dialog import LogFilterPanel
@@ -40,6 +40,8 @@ class MainWindow(ctk.CTk):
 
     def __init__(self, instance_manager=None):
         super().__init__()
+
+        self._dwm_fix_job = None  # debounce handle for post-move DWM fix
 
         # Keep instance manager ref for cleanup on close
         self._instance_manager = instance_manager
@@ -88,11 +90,12 @@ class MainWindow(ctk.CTk):
         # Process manager
         self.process_manager = ProcessManager()
 
-        # Right-side panel tracking (log_panel / settings_panel / filter_panel / project_panel)
+        # Right-side panel tracking (log_panel / settings_panel / filter_panel / project_panel / about_panel)
         self._settings_panel: SettingsPanel | None = None
         self._filter_panel: LogFilterPanel | None = None
         self._project_panel: ProjectFormPanel | None = None
-        self._right_panel = "log"  # "log" | "settings" | "filters" | "project"
+        self._about_panel: AboutPanel | None = None
+        self._right_panel = "log"  # "log" | "settings" | "filters" | "project" | "about"
 
         # Tray icon (lazy – only shown when minimize_to_tray is active)
         self._tray = TrayIcon(
@@ -220,6 +223,14 @@ class MainWindow(ctk.CTk):
             **item_style
         ).pack(fill="x", padx=4, pady=(4, 2))
 
+        ctk.CTkButton(
+            self.file_dropdown,
+            text=t("Minimize"),
+            width=100,
+            command=lambda: self._menu_action(self._on_minimize),
+            **item_style
+        ).pack(fill="x", padx=4, pady=2)
+
         # Separator
         sep_file = ctk.CTkFrame(self.file_dropdown, fg_color=COLORS["overlay"], height=1)
         sep_file.pack(fill="x", padx=8, pady=2)
@@ -228,7 +239,7 @@ class MainWindow(ctk.CTk):
             self.file_dropdown,
             text=t("Exit"),
             width=100,
-            command=lambda: self._menu_action(self._on_closing),
+            command=lambda: self._menu_action(self._on_exit_app),
             **item_style
         ).pack(fill="x", padx=4, pady=(2, 4))
 
@@ -320,8 +331,8 @@ class MainWindow(ctk.CTk):
         self.dashboard._on_stop_all()  # pylint: disable=protected-access
 
     def _show_about(self):
-        """Show about dialog with credits and quick guide."""
-        AboutDialog(self)
+        """Show the about panel on the right side (replaces log panel)."""
+        self._show_right_panel("about")
 
     def _on_settings(self):
         """Show the settings panel on the right side (replaces log panel)."""
@@ -337,7 +348,7 @@ class MainWindow(ctk.CTk):
 
         # Manage Esc binding
         self.unbind("<Escape>")
-        if panel in ("settings", "filters", "project"):
+        if panel in ("settings", "filters", "project", "about"):
             self.bind("<Escape>", lambda _e: self._esc_from_panel())
 
         if panel == "settings":
@@ -359,6 +370,12 @@ class MainWindow(ctk.CTk):
                 )
             else:
                 self._filter_panel.refresh()
+        elif panel == "about":
+            if self._about_panel is None:
+                self._about_panel = AboutPanel(
+                    self,
+                    on_back=lambda: self._show_right_panel("log"),
+                )
         # "project" panel is prepared externally before calling _show_right_panel
 
         self._place_right_panel(self._get_right_widget())
@@ -374,6 +391,8 @@ class MainWindow(ctk.CTk):
         elif self._right_panel == "project":
             if self._project_panel:
                 self._project_panel._cancel()  # pylint: disable=protected-access
+        elif self._right_panel == "about":
+            self._show_right_panel("log")
 
     def _on_project_form_requested(self, project=None):
         """Called by Dashboard when Add or Edit is clicked."""
@@ -389,9 +408,28 @@ class MainWindow(ctk.CTk):
             self._project_panel.load_project(project)
         self._show_right_panel("project")
 
-    def _on_project_saved(self, _project):
+    def _on_project_saved(self, project, is_add=False):
         """Called after a project is added or edited – refresh the dashboard."""
         self.dashboard._refresh_projects()  # pylint: disable=protected-access
+        
+        if is_add:
+            import os
+            req_file = os.path.join(project.folder_path, "requirements.txt")
+            if os.path.exists(req_file):
+                self._show_logs(project.id, project.name)
+                
+                def on_complete(success):
+                    if success:
+                        self.log_panel.add_log(project.id, f"[HAMAL] ✅ Dependencies installed successfully. Project is ready to run!")
+                    else:
+                        self.log_panel.add_log(project.id, f"[HAMAL] ❌ Dependency installation failed.")
+                    
+                    # Schedule 10-second timer to clear logs
+                    self.after(10000, lambda: self.log_panel.clear_project_logs(project.id))
+                
+                self.process_manager.install_dependencies_async(project, on_complete)
+            else:
+                self.log_panel.add_log(project.id, f"[HAMAL] ℹ️ No requirements.txt found. Skipping automatic dependency installation.")
     def _get_right_widget(self):
         """Return the widget currently assigned to the right panel slot."""
         if self._right_panel == "settings":
@@ -400,6 +438,8 @@ class MainWindow(ctk.CTk):
             return self._filter_panel
         if self._right_panel == "project":
             return self._project_panel
+        if self._right_panel == "about":
+            return self._about_panel
         return self.log_panel
 
     def _place_right_panel(self, widget):
@@ -490,6 +530,17 @@ class MainWindow(ctk.CTk):
         if new_mode != self._layout_mode:
             self._layout_mode = new_mode
             self._update_layout()
+
+        # Debounced DWM fix: fire 150ms after the last Configure event so we
+        # don't spam alpha-toggles during every frame of a drag.
+        if self._dwm_fix_job:
+            self.after_cancel(self._dwm_fix_job)
+        self._dwm_fix_job = self.after(150, self._on_move_settled)
+
+    def _on_move_settled(self):
+        """Called ~150ms after the window stops moving/resizing."""
+        self._dwm_fix_job = None
+        self._fix_dwm_transparency()
 
     def _update_layout(self):
         """Update widget positions based on current layout mode."""
@@ -661,19 +712,16 @@ class MainWindow(ctk.CTk):
         except Exception:  # pylint: disable=broad-exception-caught
             pass
 
-    def _on_closing(self):
-        """Handle window close button.
-
-        If 'minimize_to_tray' is enabled the window is hidden and a tray icon
-        appears.  File -> Exit always destroys the window.
-        """
+    def _on_minimize(self):
+        """Minimize the window (to tray if minimize_to_tray setting is active, else iconify)."""
         if self._settings.get("minimize_to_tray", False):
-            # Hide window and show tray icon
             self.withdraw()
             self._tray.show()
-            return
+        else:
+            self.iconify()
 
-        # Normal exit path
+    def _on_exit_app(self):
+        """Exit the application completely, bypassing minimize_to_tray setting."""
         self._tray.hide()
         running = self.dashboard.get_running_count()
         if running > 0:
@@ -684,6 +732,21 @@ class MainWindow(ctk.CTk):
                 return
 
         self._shutdown()
+
+    def _on_closing(self):
+        """Handle window close button (X button).
+
+        If 'minimize_to_tray' is enabled, the window is hidden to tray.
+        Otherwise, prompt for exit confirmation and shutdown.
+        """
+        if self._settings.get("minimize_to_tray", False):
+            # Hide window and show tray icon
+            self.withdraw()
+            self._tray.show()
+            return
+
+        # Normal exit path
+        self._on_exit_app()
 
     def _shutdown(self):
         """Clean shutdown: stop processes and release singleton mutex."""

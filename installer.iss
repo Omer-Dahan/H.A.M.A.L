@@ -2,7 +2,7 @@
 ; Creates a standard Windows installer from PyInstaller one-folder build
 
 #define MyAppName "HAMAL"
-#define MyAppVersion "0.2.0"
+#define MyAppVersion "1.0.0"
 #define MyAppPublisher "Omer Dahan"
 #define MyAppURL "https://github.com/Omer-Dahan/H.A.M.A.L"
 #define MyAppExeName "HAMAL.exe"
